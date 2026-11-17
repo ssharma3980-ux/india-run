@@ -75,7 +75,30 @@ def check(out):
     return r.returncode == 0
 
 
+def build_split(out):
+    """dist/web/: same game, assets as separate files (smaller page, for hosts with per-file limits)."""
+    web = out / "web"
+    if web.exists():
+        shutil.rmtree(web)
+    shutil.copytree(ROOT / "assets", web / "assets", ignore=shutil.ignore_patterns("*.md", "*.txt"))
+    html = (out / "india-run.html").read_text(encoding="utf-8")
+    a = html.index("<script>/* Microsoft Rocketbox avatars & mocap (MIT) */")
+    b = html.index("</script>", a) + len("</script>")
+    # binary models (FBX, GLB) travel inside a JS data file; textures/clips stay as plain files
+    parts = []
+    for f in sorted(list((web / "assets").rglob("*.fbx")) + list((web / "assets").rglob("*.glb"))):
+        rel = f.relative_to(web / "assets").as_posix()
+        parts.append(f'"{rel}":"{base64.b64encode(f.read_bytes()).decode()}"')
+        f.unlink()
+    (web / "assets" / "models.js").write_text("window.IR=window.IR||{};IR.ASSETS=Object.assign(IR.ASSETS||{},{" + ",\n".join(parts) + "});", encoding="utf-8")
+    (web / "index.html").write_text(html[:a] + '<script src="assets/models.js"></script>' + html[b:], encoding="utf-8")
+    kb = (web / "index.html").stat().st_size / 1024
+    print(f"Built dist/web/ (index.html {kb:,.0f} KB + assets/)")
+
+
 if __name__ == "__main__":
     o = build()
+    if "--split" in sys.argv:
+        build_split(o)
     if "--check" in sys.argv and not check(o):
         sys.exit(1)

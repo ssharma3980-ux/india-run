@@ -1,3 +1,4 @@
 node_modules/
 dist/game.js
 __pycache__/
+dist/web/

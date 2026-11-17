@@ -39,7 +39,7 @@
       }
       return blobCache[p];
     }
-    return 'assets/' + p;
+    return 'assets/' + p + (IR.FBXEXT && p.endsWith('.fbx') ? IR.FBXEXT : '');
   };
 
   const Lib = (IR.Avatars = { models: {}, clips: {}, ready: false });
