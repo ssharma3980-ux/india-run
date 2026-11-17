@@ -13,10 +13,10 @@ ROOT = pathlib.Path(__file__).resolve().parent
 SRC = ROOT / "src"
 ORDER = [
     "core/util.js", "core/textures.js", "core/materials.js", "core/audio.js",
-    "world/env.js", "world/props.js", "world/themes.js", "world/cities2.js", "world/world.js",
+    "world/env.js", "world/props.js", "world/themes.js", "world/cities2.js", "world/culture.js", "world/world.js",
     "entities/runner.js", "entities/avatar.js",
-    "game/progress.js", "game/game.js",
-    "ui/i18n.js", "ui/ui.js",
+    "game/progress.js", "game/multiplayer.js", "game/game.js",
+    "ui/i18n.js", "ui/i18n2.js", "ui/ui.js",
     "main.js",
 ]
 
@@ -37,7 +37,7 @@ def assets_js():
     base = ROOT / "assets"
     parts = []
     for f in sorted(base.rglob("*")):
-        if f.suffix.lower() in (".fbx", ".jpg", ".png", ".json"):
+        if f.suffix.lower() in (".fbx", ".jpg", ".png", ".json", ".glb"):
             rel = f.relative_to(base).as_posix()
             parts.append(f'"{rel}":"{base64.b64encode(f.read_bytes()).decode()}"')
     return "IR.ASSETS={" + ",\n".join(parts) + "};"

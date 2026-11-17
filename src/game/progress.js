@@ -4,15 +4,17 @@
   const def = () => ({
     coins: 0, best: 0, totalCoins: 0, totalDist: 0, runs: 0, totalJumps: 0,
     owned: { arjun: [0] }, char: 'arjun', outfit: 0, city: 'varanasi', mode: 'yatra',
-    upgrades: { magnet: 0, shield: 0, double: 0, multi: 0, boost: 0, glide: 0 },
+    upgrades: { magnet: 0, shield: 0, double: 0, multi: 0, boost: 0, glide: 0, rath: 0 },
+    unlocked: { varanasi: 1, delhi: 1, jaipur: 1, mumbai: 1, agra: 1 }, treasures: {}, facts: {}, tokens: 0, festival: 'diwali', name: '',
+    dc: { day: '', tasks: [], prog: {}, claimed: [], chest: false, streak: 0, lastDone: '' },
     mLevel: 0, missions: null, ach: {}, visited: {},
     daily: { last: '', streak: 0 }, challenge: { day: '', done: false },
-    settings: { quality: 'high', fov: 70, music: true, sfx: true, lang: 'en', tutorial: true },
+    settings: { quality: 'high', fov: 70, music: true, sfx: true, lang: 'en', tutorial: true, allCities: false },
   });
   const P = (IR.progress = { data: null });
   P.load = () => {
     const d = IR.store.get(KEY, null), base = def();
-    P.data = d ? Object.assign(base, d, { settings: Object.assign(base.settings, d.settings || {}), upgrades: Object.assign(base.upgrades, d.upgrades || {}) }) : base;
+    P.data = d ? Object.assign(base, d, { settings: Object.assign(base.settings, d.settings || {}), upgrades: Object.assign(base.upgrades, d.upgrades || {}), unlocked: Object.assign(base.unlocked, d.unlocked || {}) }) : base;
     if (!P.data.missions) P.newMissions();
     return P.data;
   };
@@ -71,15 +73,60 @@
 
   /* upgrades */
   P.UP = {
-    magnet: { base: 8 }, shield: { base: 10 }, double: { base: 10 }, multi: { base: 10 }, boost: { base: 4 }, glide: { base: 6 },
+    rath: { base: 3.5 }, magnet: { base: 8 }, shield: { base: 10 }, double: { base: 10 }, multi: { base: 10 }, boost: { base: 4 }, glide: { base: 6 },
   };
   P.duration = (k) => P.UP[k].base + P.data.upgrades[k] * (k === 'boost' ? 0.8 : 1.6);
   P.upCost = (k) => [250, 600, 1200, 2500, 5000][P.data.upgrades[k]];
+
+  /* cities: unlock by reaching them in Bharat Yatra, or with coins */
+  P.CITY_PRICE = 400;
+  P.isUnlocked = (id) => !!(P.data.settings.allCities || P.data.unlocked[id]);
+  P.unlock = (id) => { if (P.data.unlocked[id]) return false; P.data.unlocked[id] = 1; P.save(); return true; };
+  P.unlockedList = () => IR.CITY_ORDER.filter(P.isUnlocked);
+
+  /* treasures & culture */
+  P.addTreasure = (city, idx) => { const k = city + ':' + idx, isNew = !P.data.treasures[k]; P.data.treasures[k] = (P.data.treasures[k] || 0) + 1; P.data.coins += isNew ? 150 : 40; P.save(); return isNew; };
+  P.treasureCount = () => Object.keys(P.data.treasures).length;
+
+  /* daily challenges: 3 date-seeded tasks, progress accumulates over the day */
+  const DC_POOL = [
+    { id: 'coins', n: [150, 250, 400], t: { en: 'Collect {n} coins today', hi: 'आज {n} सिक्के जमा करें', gu: 'આજે {n} સિક્કા ભેગા કરો' } },
+    { id: 'dist', n: [1500, 2500, 4000], t: { en: 'Run {n} m today', hi: 'आज {n} मीटर दौड़ें', gu: 'આજે {n} મીટર દોડો' } },
+    { id: 'jumps', n: [30, 50, 80], t: { en: 'Jump {n} times today', hi: 'आज {n} बार कूदें', gu: 'આજે {n} વાર કૂદો' } },
+    { id: 'slides', n: [20, 35, 60], t: { en: 'Slide {n} times today', hi: 'आज {n} बार फिसलें', gu: 'આજે {n} વાર સરકો' } },
+    { id: 'treasure', n: [1, 2, 3], t: { en: 'Find {n} hidden treasure(s)', hi: '{n} छिपा ख़ज़ाना खोजें', gu: '{n} છુપો ખજાનો શોધો' } },
+    { id: 'tokens', n: [20, 40, 60], t: { en: 'Collect {n} festival tokens', hi: '{n} त्योहार टोकन जमा करें', gu: '{n} તહેવાર ટોકન ભેગા કરો' } },
+    { id: 'powers', n: [4, 6, 10], t: { en: 'Grab {n} power-ups today', hi: 'आज {n} पावर-अप लें', gu: 'આજે {n} પાવર-અપ લો' } },
+    { id: 'facts', n: [2, 3, 4], t: { en: 'Discover {n} culture facts', hi: '{n} संस्कृति तथ्य खोजें', gu: '{n} સંસ્કૃતિ તથ્ય શોધો' } },
+  ];
+  P.dailyChallenges = () => {
+    const dc = P.data.dc, day = P.today();
+    if (dc.day !== day) {
+      let h = 0; for (const ch of day) h = (h * 131 + ch.charCodeAt(0)) >>> 0;
+      const r = IR.rng(h), pool = DC_POOL.slice();
+      const tasks = []; while (tasks.length < 3) { const i = Math.floor(r() * pool.length); const t = pool.splice(i, 1)[0]; tasks.push({ id: t.id, n: t.n[tasks.length] }); }
+      P.data.dc = { day, tasks, prog: {}, claimed: [], chest: false, streak: dc.streak || 0, lastDone: dc.lastDone || '' };
+      P.save();
+    }
+    return P.data.dc;
+  };
+  P.dcText = (t, lang) => { const p = DC_POOL.find((q) => q.id === t.id); return (p.t[lang] || p.t.en).replace('{n}', t.n); };
+  P.dcAdd = (id, v, onDone) => {
+    const dc = P.dailyChallenges(); if (!v) return;
+    dc.prog[id] = (dc.prog[id] || 0) + v;
+    dc.tasks.forEach((t, i) => { if (t.id === id && !dc.claimed.includes(i) && dc.prog[id] >= t.n) { dc.claimed.push(i); P.data.coins += 100; onDone && onDone(t); } });
+    if (dc.claimed.length === 3 && !dc.chest) {
+      dc.chest = true; P.data.coins += 300;
+      const y = new Date(); y.setDate(y.getDate() - 1); const yest = y.getFullYear() + '-' + (y.getMonth() + 1) + '-' + y.getDate();
+      dc.streak = dc.lastDone === yest ? (dc.streak || 0) + 1 : 1; dc.lastDone = P.today();
+      onDone && onDone(null, true);
+    }
+  };
 
   /* daily challenge */
   P.challenge = () => {
     const day = P.today(); let h = 0; for (const ch of day) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
     if (P.data.challenge.day !== day) P.data.challenge = { day, done: false };
-    return { city: IR.CITY_ORDER[h % IR.CITY_ORDER.length], target: 120 + (h % 5) * 20, seed: h, done: P.data.challenge.done, reward: 400 };
+    return { city: IR.CITY_ORDER[h % IR.CITY_ORDER.length], festival: IR.FEST_ORDER[h % IR.FEST_ORDER.length], target: 120 + (h % 5) * 20, seed: h, done: P.data.challenge.done, reward: 400 };
   };
 })();

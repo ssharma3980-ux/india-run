@@ -155,6 +155,9 @@
         case 'shieldBreak': this.noiseHit(t, 0.5, 0.35, 'highpass', 2500, 1, d); [12, 7, 0].forEach((s, i) => this.osc('sine', this.mtof(76 + s), t + i * 0.05, 0.2, 0.08, d)); break;
         case 'mission': [0, 7, 12, 16, 19, 24].forEach((s, i) => this.osc('sine', this.mtof(67 + s), t + i * 0.08, 0.35, 0.09, d, 0.004, 0.6)); this.bell(); break;
         case 'click': this.osc('sine', 880, t, 0.05, 0.06, d); break;
+        case 'firework': this.noiseHit(t, 0.9, 0.12, 'lowpass', 1800, 1, this.aBus, 200); this.noiseHit(t + 0.05, 0.4, 0.05, 'highpass', 4000, 1, this.aBus); break;
+        case 'treasure': [0, 4, 7, 11, 14, 19, 24].forEach((s, i) => this.osc('triangle', this.mtof(70 + s), t + i * 0.07, 0.4, 0.09, d, 0.003, 0.7)); this.bell(); break;
+        case 'token': { const f = 880 * Math.pow(2, (k % 6) / 12); this.osc('sine', f, t, 0.18, 0.1, d, 0.002, 0.5); this.osc('triangle', f * 2, t + 0.04, 0.14, 0.05, d); break; }
         case 'fall': { const o = this.osc('sine', 600, t, 0.9, 0.15, d); o.frequency.exponentialRampToValueAtTime(80, t + 0.9); break; }
       }
     }

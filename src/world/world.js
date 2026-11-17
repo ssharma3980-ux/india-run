@@ -3,14 +3,7 @@
   const PI = Math.PI;
   const DIRS = [new THREE.Vector3(0, 0, -1), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(-1, 0, 0)];
   const YAWS = [0, -PI / 2, PI, PI / 2];
-  IR.POWERS = {
-    magnet: { icon: '🧲', ring: 'rgba(255,80,80,.8)', col: '#ff5050' },
-    shield: { icon: '🛡️', ring: 'rgba(80,170,255,.8)', col: '#4aa8ff' },
-    double: { icon: '🪙', ring: 'rgba(255,200,40,.85)', col: '#ffc828' },
-    multi: { icon: '✖️', ring: 'rgba(170,90,255,.85)', col: '#aa5aff' },
-    boost: { icon: '⚡', ring: 'rgba(255,150,30,.85)', col: '#ff961e' },
-    glide: { icon: '🪁', ring: 'rgba(40,220,160,.85)', col: '#28dca0' },
-  };
+  /* IR.POWERS (Indian power-ups) is defined in culture.js */
 
   class World {
     constructor(scene) {
@@ -25,15 +18,15 @@
     reset(o) {
       for (const r of this.runs) IR.disposeTree(r.group);
       this.runs = []; this.jobs = []; this.count = 0;
-      this.mode = o.mode; this.city = o.city; this.seed = o.seed || ((Math.random() * 1e9) | 0);
-      this.cityStart = Math.max(0, IR.CITY_ORDER.indexOf(o.city));
+      this.mode = o.mode; this.city = o.city; this.festival = o.festival || null; this.cityList = o.cityList || IR.CITY_ORDER; this.seed = o.seed || ((Math.random() * 1e9) | 0);
+      this.cityStart = Math.max(0, this.cityList.indexOf(o.city));
       for (let i = 0; i < 3; i++) this.addRun();
       this.flush();
       return this.runs[0];
     }
     themeFor(i) {
       if (this.mode !== 'yatra') return IR.THEMES[this.city];
-      return IR.THEMES[IR.CITY_ORDER[(this.cityStart + Math.floor(i / 3)) % IR.CITY_ORDER.length]];
+      return IR.THEMES[this.cityList[(this.cityStart + Math.floor(i / 3)) % this.cityList.length]];
     }
 
     addRun() {
@@ -53,18 +46,38 @@
       this.scene.add(run.group);
       if (prev) prev.next = run;
       this.runs.push(run);
+      // landmark monument (modelled in Blender) — one per run, cycling through the city's list
+      const cult = IR.CULTURE[theme.id];
+      if (cult && cult.mon.length) {
+        const cfg = cult.mon[i % cult.mon.length], md = IR.MON[cfg.k];
+        if (md && IR.Monuments.models[cfg.k]) {
+          const sc = cfg.s || 1, dC = Math.round(L * (cfg.place === 'span' ? 0.55 : 0.45));
+          run.mon = { cfg, d: dC, half: (cfg.place === 'span' ? md.dp : md.w) * sc / 2 + 3, side: cfg.place === 'span' ? 0 : cfg.place === 'left' ? -1 : 1 };
+        }
+      }
+      run.factD = run.mon ? run.mon.d - 30 : (run.newCity ? 75 : -1);
       this.plan(run, r);
       this.jobs.push(() => this.buildGround(run));
       this.jobs.push(() => this.buildContent(run));
-      const ranges = [-1, 1].map((s) => [s, i === 0 ? -60 : run.startTurn === s ? 50 : 12, L - 12]);
-      for (const [s, d0, d1] of ranges)
-        for (let a = d0; a < d1 - 4; a += 36) {
-          const b0 = a, b1 = Math.min(a + 36, d1), seed = this.seed * 13 + i * 101 + (s + 1) * 1000 + a;
-          this.jobs.push(() => this.buildDecor(run, s, b0, b1, seed));
-        }
+      if (run.mon) this.jobs.push(() => this.buildMonument(run));
+      if (this.festival) this.jobs.push(() => this.buildFestival(run));
+      const cutRange = (s, d0, d1) => {
+        const m = run.mon; if (!m || (m.side !== 0 && m.side !== s)) return [[d0, d1]];
+        const c0 = m.d - m.half, c1 = m.d + m.half, out = [];
+        if (c0 - d0 > 6) out.push([d0, Math.min(d1, c0)]);
+        if (d1 - c1 > 6) out.push([Math.max(d0, c1), d1]);
+        return out;
+      };
+      for (const s of [-1, 1])
+        for (const [e0, e1] of cutRange(s, i === 0 ? -60 : run.startTurn === s ? 50 : 12, L - 12))
+          for (let a = e0; a < e1 - 4; a += 36) {
+            const b0 = a, b1 = Math.min(a + 36, e1), seed = this.seed * 13 + i * 101 + (s + 1) * 1000 + Math.round(a);
+            this.jobs.push(() => this.buildDecor(run, s, b0, b1, seed));
+          }
       if (theme.far) {
-        const s = 1, d0 = i === 0 ? -60 : run.startTurn === s ? 132 : 12;
-        for (let a = d0; a < L - 16; a += 36) { const b0 = a, b1 = Math.min(a + 36, L - 12), seed = this.seed * 17 + i * 131 + a; this.jobs.push(() => this.buildFar(run, s, b0, b1, seed)); }
+        const s = 1;
+        for (const [e0, e1] of cutRange(s, i === 0 ? -60 : run.startTurn === s ? 132 : 12, L - 12))
+          for (let a = e0; a < e1 - 4; a += 36) { const b0 = a, b1 = Math.min(a + 36, e1), seed = this.seed * 17 + i * 131 + Math.round(a); this.jobs.push(() => this.buildFar(run, s, b0, b1, seed)); }
       }
       this.jobs.push(() => { run.ready = true; });
       return run;
@@ -108,8 +121,19 @@
         const idx = Math.floor(r() * (items.length - 1)), d0 = (items[idx].d + items[idx + 1].d) / 2;
         const blockedNear = (l) => items.some((o) => Math.abs(o.d - d0) < 4 && o.lanes.includes(l));
         const lane = [0, 1, 2].find((l) => !blockedNear(l));
-        const kinds = ['magnet', 'magnet', 'shield', 'double', 'multi', 'boost', 'glide'];
+        const kinds = ['magnet', 'magnet', 'shield', 'double', 'multi', 'boost', 'glide', 'rath'];
         if (lane !== undefined && !run.coinData.some((cd) => Math.abs(cd.d - d0) < 1.5 && cd.x === IR.LANES[lane])) run.pickupPlan = { d: d0, lane, kind: IR.pick(r, kinds) };
+      }
+      // festival tokens replace every 4th coin
+      if (this.festival) run.coinData.forEach((cd, k) => { if (k % 4 === 1) cd.tok = true; });
+      // hidden treasure: floats above a single-lane hurdle (jump for it) or under a banner (slide for it)
+      if (run.i > 0 && r() < 0.4) {
+        const cands = items.filter((it) => (it.type === 'hurdle' && it.lanes.length === 1) || it.type === 'banner');
+        if (cands.length) {
+          const it = IR.pick(r, cands), lane = it.type === 'hurdle' ? it.lanes[0] : Math.floor(r() * 3);
+          run.coinData = run.coinData.filter((cd) => !(Math.abs(cd.d - it.d) < 2 && cd.x === IR.LANES[lane]));
+          run.treasurePlan = { d: it.d, x: IR.LANES[lane], y: it.type === 'hurdle' ? 1.95 : 0.35 };
+        }
       }
     }
 
@@ -170,7 +194,15 @@
         const im = new THREE.InstancedMesh(this.coinGeo, [IR.M.coinSide, IR.M.coinFace, IR.M.coinFace], n);
         im.castShadow = true; im.frustumCulled = false;
         run.coins = im; run.group.add(im);
-        for (const cd of run.coinData) { cd.lx = cd.x; cd.ly = cd.y; cd.lz = -cd.d; }
+        for (const cd of run.coinData) {
+          cd.lx = cd.x; cd.ly = cd.y; cd.lz = -cd.d;
+          if (cd.tok) { const sp = new THREE.Sprite(this.tokenMat()); sp.scale.set(0.95, 0.95, 1); sp.position.set(cd.lx, cd.ly, cd.lz); run.group.add(sp); cd.sprite = sp; }
+        }
+      }
+      if (run.treasurePlan) {
+        const t = run.treasurePlan, g = IR.makeChest();
+        g.position.set(t.x, t.y, -t.d); run.group.add(g);
+        run.treasure = Object.assign({ g, taken: false }, t);
       }
       if (run.pickupPlan) {
         const p = run.pickupPlan, g = new THREE.Group();
@@ -187,6 +219,34 @@
       const b = new IR.Batcher(), c = IR.P.ctx(b, IR.rng(seed), run.group);
       (s < 0 ? run.theme.left : run.theme.right)(c, s, d0, d1, run.theme);
       b.build(run.group);
+      if (c.glows.length) IR.addGlows(run.group, c.glows);
+      run.anim.push(...c.anim);
+    }
+
+    tokenMat() {
+      const k = this.festival;
+      if (!this._tokMat || this._tokKey !== k) { this._tokKey = k; this._tokMat = new THREE.SpriteMaterial({ map: IR.tex.icon(IR.FESTIVALS[k].token, 'rgba(255,200,80,.85)'), depthWrite: false, toneMapped: false }); }
+      return this._tokMat;
+    }
+
+    buildMonument(run) {
+      const m = run.mon, cfg = m.cfg, md = IR.MON[cfg.k], sc = cfg.s || 1, th = run.theme;
+      const obj = IR.Monuments.models[cfg.k].clone();
+      obj.scale.setScalar(sc);
+      if (m.side === 0) obj.position.set(0, 0, -m.d);
+      else {
+        const s = m.side, depth = md.dp * sc, y = cfg.water ? th.floor.y + 0.25 : 0;
+        obj.position.set(s * (4 + cfg.u + depth / 2), y, -m.d);
+        obj.rotation.y = -s * Math.PI / 2;
+        if (cfg.pad) { const pad = new THREE.Mesh(IR.G.box, IR.M.stone); pad.scale.set(depth + 6, 3.4, md.w * sc + 6); pad.position.set(obj.position.x, -1.5, -m.d); pad.receiveShadow = true; run.group.add(pad); }
+      }
+      run.group.add(obj);
+    }
+
+    buildFestival(run) {
+      const b = new IR.Batcher(), c = IR.P.ctx(b, IR.rng(this.seed + run.i * 7), run.group);
+      IR.festDecor(c, run, this.festival);
+      b.build(run.group, { cast: false });
       if (c.glows.length) IR.addGlows(run.group, c.glows);
       run.anim.push(...c.anim);
     }
@@ -224,12 +284,14 @@
           q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, this.t * 3);
           for (let k = 0; k < run.coinData.length; k++) {
             const cd = run.coinData[k];
-            if (cd.taken) sc.set(0, 0, 0); else sc.set(1, 1, 1);
+            if (cd.taken || cd.tok) sc.set(0, 0, 0); else sc.set(1, 1, 1);
+            if (cd.sprite) { cd.sprite.visible = !cd.taken; cd.sprite.position.set(cd.lx, cd.ly + Math.sin(this.t * 3 + cd.d) * 0.08, cd.lz); }
             v.set(cd.lx, cd.ly + Math.sin(this.t * 3 + cd.d) * 0.06, cd.lz);
             m.compose(v, q, sc); run.coins.setMatrixAt(k, m);
           }
           run.coins.instanceMatrix.needsUpdate = true;
         }
+        if (run.treasure && !run.treasure.taken) { const g = run.treasure.g; g.rotation.y += dt * 1.2; g.position.y = run.treasure.y + Math.sin(this.t * 2.2) * 0.1; }
         for (const p of run.pickups) if (!p.taken) { p.g.position.y = p.y + Math.sin(this.t * 2.5) * 0.15; p.ring.rotation.y += dt * 2; p.ring.rotation.x = 0.3; }
         if (run === cur) for (const f of run.falls) {
           if (!f.active && pd > f.d - 38) f.active = true;

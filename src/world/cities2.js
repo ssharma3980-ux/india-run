@@ -100,7 +100,7 @@
       fol(c, s, d0, d1, (d) => P.minaret(c, s * (4 + 26), 0.2, d, 18, m.stoneRed, m.marble), 30);
     },
     right(c, s, d0, d1, th) { H.riverSide(c, s, d0, d1, th); },
-    far(c, s, d0, d1, th) { const r = c.r; for (let d = d0 + 30; d < d1 - 25; d += 120) P.mughalTomb(c, s * (4 + 150), th.floor.y + 1, d, 1.0); for (let d = d0; d < d1; d += 8) P.cypress(c, s * (4 + 100 + r() * 10), th.floor.y + 1, d, 9); c.box(M().stoneRed, 30, 3, d1 - d0, s * (4 + 110), th.floor.y + 0.6, (d0 + d1) / 2); },
+    far(c, s, d0, d1, th) { const r = c.r; for (let d = d0; d < d1; d += 8) P.cypress(c, s * (4 + 100 + r() * 10), th.floor.y + 1, d, 9); c.box(M().stoneRed, 30, 3, d1 - d0, s * (4 + 110), th.floor.y + 0.6, (d0 + d1) / 2); },
     gateMat: 'stoneRed', domeMat: 'marble', gateBg: ['#7a1c3a', '#3a0c18'],
   };
 
@@ -149,7 +149,6 @@
       H.rowBuildings(c, s, d0, d1, 1.5, 0, (dc, l) => P.haveli(c, s, 1.5, dc, l, 9, 8 + Math.floor(r() * 3) * 4, 0, m.facade.ghat, { dome: true, domeMat: m.marble }));
       fol(c, s, d0, d1, (d) => P.minaret(c, s * (4 + 14), 0, d, 22, m.stonePlain, m.marble), 34);
     },
-    landmarks: (c, run) => { for (let d = 70; d < run.L - 40; d += 95) P.landmarkArch(c, d, M().stonePlain); },
     gateMat: 'stonePlain', domeMat: 'marble', gateBg: ['#5a2a6a', '#2a1030'],
   };
 

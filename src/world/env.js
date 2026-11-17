@@ -99,6 +99,14 @@
         this.birds.add(b);
       }
       scene.add(this.birds);
+      // festival sky effects: fireworks (Diwali) and colour clouds (Holi)
+      const FN = 900;
+      this.fw = { n: FN, i: 0, pos: new Float32Array(FN * 3), col: new Float32Array(FN * 3), vel: new Float32Array(FN * 3), life: new Float32Array(FN), timer: 0 };
+      const fg = new THREE.BufferGeometry();
+      fg.setAttribute('position', new THREE.BufferAttribute(this.fw.pos, 3)); fg.setAttribute('color', new THREE.BufferAttribute(this.fw.col, 3));
+      for (let k = 0; k < FN; k++) this.fw.pos[k * 3 + 1] = -999;
+      this.fwPts = new THREE.Points(fg, new THREE.PointsMaterial({ size: 1.1, map: IR.M.glowTex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+      this.fwPts.frustumCulled = false; scene.add(this.fwPts);
       this.t = 0; this.theme = null;
       this.sunDir = new THREE.Vector3(0, 0.3, -1).normalize();
     }
@@ -128,7 +136,7 @@
 
     apply(th) {
       this.theme = th;
-      const a = th.atmos, ph = a.phys || { turb: 6, ray: 1.5, mie: 0.005, g: 0.8 };
+      const a = IR.festAtmos ? IR.festAtmos(th, this.festival) : th.atmos, ph = a.phys || { turb: 6, ray: 1.5, mie: 0.005, g: 0.8 };
       this.sunDir.set(...a.sunDir).normalize();
       for (const sky of [this.sky, this.envSky]) {
         const u = sky.material.uniforms;
@@ -173,7 +181,7 @@
       if (!this.panoCache[th.id]) this.panoCache[th.id] = IR.tex.panorama(th.pano.kind, th.pano.cols, th.pano.seed || 4);
       this.pano.material.map = this.panoCache[th.id]; this.pano.material.needsUpdate = true;
       this.pano.position.y = (f.y || 0) + 190 - 8;
-      this.birds.visible = !!th.birds;
+      this.birds.visible = !!th.birds && !(IR.FESTIVALS && IR.FESTIVALS[this.festival] && IR.FESTIVALS[this.festival].night);
       if (this.flare) this.flare.visible = a.sunI > 2 && this.sunDir.y < 0.5;
       this.makeWeather(th);
     }
@@ -245,6 +253,35 @@
         }
         p.needsUpdate = true;
       }
+      const fest = IR.FESTIVALS && IR.FESTIVALS[this.festival], fw = this.fw;
+      if (fest && (fest.fireworks || fest.puffs || this.festival === 'navratri')) {
+        fw.timer -= dt;
+        if (fw.timer <= 0) {
+          fw.timer = fest.puffs ? 0.5 : 0.7 + Math.random() * 0.9;
+          const fx = -Math.sin(this.camYaw || 0), fz = -Math.cos(this.camYaw || 0);
+          const dist = fest.puffs ? 14 + Math.random() * 20 : 70 + Math.random() * 60, side = (Math.random() - 0.5) * (fest.puffs ? 14 : 90);
+          const cx = cam.position.x + fx * dist - fz * side, cz = cam.position.z + fz * dist + fx * side, cy = fest.puffs ? 1 + Math.random() * 2 : 35 + Math.random() * 30;
+          const c = new THREE.Color(IR.pick(Math.random, ['#ff3d7f', '#ffd400', '#00e0ff', '#7cff4a', '#ff7a00', '#c86bff', '#ffffff']));
+          const cnt = fest.puffs ? 40 : 90, spd = fest.puffs ? 3 : 16;
+          for (let k = 0; k < cnt; k++) {
+            const i = fw.i++ % fw.n, th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1), v = spd * (0.6 + Math.random() * 0.4);
+            fw.pos.set([cx, cy, cz], i * 3); fw.col.set([c.r, c.g, c.b], i * 3);
+            fw.vel.set([Math.sin(ph) * Math.cos(th) * v, Math.cos(ph) * v * (fest.puffs ? 0.4 : 1) + (fest.puffs ? 1.5 : 0), Math.sin(ph) * Math.sin(th) * v], i * 3);
+            fw.life[i] = fest.puffs ? 1.6 + Math.random() : 1.4 + Math.random() * 0.8;
+          }
+          if (!fest.puffs && IR.audio && IR.audio.play) IR.audio.play('firework');
+        }
+        this.fwPts.material.size = fest.puffs ? 2.2 : 1.1;
+      }
+      for (let i = 0; i < fw.n; i++) {
+        if (fw.life[i] <= 0) continue;
+        fw.life[i] -= dt;
+        if (fw.life[i] <= 0) { fw.pos[i * 3 + 1] = -999; continue; }
+        fw.vel[i * 3 + 1] -= (fest && fest.puffs ? 0.6 : 7) * dt;
+        for (let a = 0; a < 3; a++) { fw.vel[i * 3 + a] *= 1 - 1.2 * dt; fw.pos[i * 3 + a] += fw.vel[i * 3 + a] * dt; }
+        if (fw.life[i] < 0.5) for (let a = 0; a < 3; a++) fw.col[i * 3 + a] *= 0.93;
+      }
+      this.fwPts.geometry.attributes.position.needsUpdate = true; this.fwPts.geometry.attributes.color.needsUpdate = true;
       if (this.birds.visible) {
         for (const b of this.birds.children) {
           const u = b.userData, t = this.t * u.sp + u.off;

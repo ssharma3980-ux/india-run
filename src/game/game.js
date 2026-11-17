@@ -59,7 +59,8 @@
       await step(0.45, () => { IR.P.initFlag(); this.data = IR.progress.load(); });
       await step(0.55, () => { this.env = new IR.Env(this.renderer, this.scene); this.world = new IR.World(this.scene); this.fx = new Particles(this.scene); });
       onProgress && onProgress(0.6);
-      try { await IR.Avatars.load((k) => onProgress && onProgress(0.6 + k * 0.25)); } catch (e) { console.warn('avatars', e); }
+      try { await IR.Avatars.load((k) => onProgress && onProgress(0.6 + k * 0.2)); } catch (e) { console.warn('avatars', e); }
+      try { await IR.Monuments.load((k) => onProgress && onProgress(0.8 + k * 0.08)); } catch (e) { console.warn('monuments', e); }
       await step(0.9, () => { this.makePost(); this.applySettings(); this.setupWorld(); this.makeRunner(); });
       await step(1, () => { this.resize(); });
       addEventListener('resize', () => this.resize());
@@ -89,7 +90,8 @@
 
     setupWorld(seed) {
       const d = this.data, mode = this.mode || d.mode, city = this.cityOverride || d.city;
-      this.run = this.world.reset({ mode: mode === 'yatra' ? 'yatra' : 'city', city, seed });
+      this.env.festival = this.festival || null;
+      this.run = this.world.reset({ mode: mode === 'yatra' ? 'yatra' : 'city', city, seed, festival: this.festival || null });
       this.env.apply(this.run.theme);
       this.curTheme = this.run.theme;
       this.p = { d: 3, x: 0, y: 0, laneI: 1 };
@@ -132,19 +134,22 @@
     }
 
     /* ---------- run lifecycle ---------- */
-    startRun(mode) {
+    startRun(mode, opts = {}) {
       IR.audio.init();
       this.mode = mode;
+      this.runOpts = opts;
       const d = this.data;
-      this.cityOverride = null;
-      let seed;
-      if (mode === 'daily') { const ch = IR.progress.challenge(); this.cityOverride = ch.city; seed = ch.seed; this.challenge = ch; }
+      this.cityOverride = opts.city || null;
+      let seed = opts.seed;
+      this.festival = opts.festival !== undefined ? opts.festival : mode === 'festival' ? d.festival : null;
+      if (mode === 'daily') { const ch = IR.progress.challenge(); this.cityOverride = ch.city; seed = ch.seed; this.challenge = ch; this.festival = ch.festival; }
       else this.challenge = null;
       this.setupWorld(seed);
+      this.runSeed = this.world.seed;
       this.previewChar = undefined; this.previewOutfit = undefined; this.makeRunner();
       this.p = {
         d: 3, x: 0, y: 0, vy: 0, laneI: 1, speed: 11, dist: 0, coins: 0, score: 0, slideT: 0, slideQ: false, grounded: true,
-        turnQ: false, turns: 0, jumps: 0, slides: 0, powers: 0, pw: { magnet: 0, shield: 0, double: 0, multi: 0, boost: 0, glide: 0 },
+        turnQ: false, turns: 0, jumps: 0, slides: 0, powers: 0, pw: { magnet: 0, shield: 0, double: 0, multi: 0, boost: 0, glide: 0, rath: 0 }, tokens: 0, treasures: 0, facts: 0,
         invuln: 0, revives: 0, combo: 0, comboT: 0, nextCheck: 1000, timeLeft: mode === 'timed' ? 120 : 0, fall: false, dead: false, chDone: false,
       };
       this.mult = IR.progress.multiplier();
@@ -153,14 +158,18 @@
       this.missionTimer = 0;
       d.visited[this.run.theme.id] = 1;
       IR.audio.startMusic(this.run.theme, 0.3);
+      IR.mp.startRecording();
+      if (opts.ghost) IR.mp.makeGhost(this, opts.ghost); else IR.mp.removeGhost(this);
       IR.ui.showHUD(this.p, this);
+      if (this.festival) setTimeout(() => IR.ui.festivalCard(this.festival), 900);
       if (d.settings.tutorial) IR.ui.tutorial();
     }
     pause() { if (this.state !== 'playing') return; this.state = 'paused'; IR.ui.show('pause'); IR.audio.ctx && IR.audio.ctx.suspend(); }
     resume() { if (this.state !== 'paused') return; IR.ui.hide('pause'); IR.audio.ctx && IR.audio.ctx.resume(); this.countdown = 0; this.state = 'playing'; this.clock.getDelta(); }
     toMenu() {
       IR.audio.stopMusic(); IR.audio.ctx && IR.audio.ctx.resume();
-      this.mode = null; this.cityOverride = null; this.setupWorld(); this.makeRunner();
+      IR.mp.removeGhost(this); IR.mp.party = null;
+      this.mode = null; this.cityOverride = null; this.festival = null; this.runOpts = {}; this.setupWorld(); this.makeRunner();
       this.state = 'menu'; IR.ui.toMenu();
     }
 
@@ -190,9 +199,13 @@
       d.coins += p.coins; d.totalCoins += p.coins; d.totalDist += p.dist; d.runs++; d.totalJumps += p.jumps;
       const newBest = p.score > d.best; if (newBest) d.best = Math.floor(p.score);
       d.settings.tutorial = false;
+      d.tokens = (d.tokens || 0) + p.tokens;
       IR.progress.checkAch({ dist: p.dist }, (a) => IR.ui.toast(a.icon + ' ' + (a.t[IR.ui.lang] || a.t.en), 'ach'));
-      IR.progress.save();
-      IR.ui.gameOver(p, newBest);
+      const P = IR.progress, dcDone = (t, all) => IR.ui.toast(all ? '🎁 ' + IR.ui.tr('dcAll') + ' +300 🪙' : '✅ ' + P.dcText(t, IR.ui.lang) + ' +100 🪙', 'mission');
+      for (const [k, v] of [['coins', p.coins], ['dist', Math.floor(p.dist)], ['jumps', p.jumps], ['slides', p.slides], ['treasure', p.treasures], ['tokens', p.tokens], ['powers', p.powers], ['facts', p.facts]]) P.dcAdd(k, v, dcDone);
+      P.save();
+      if (IR.mp.party) { IR.mp.partyResult(p); IR.ui.partyTurnOver(p); }
+      else IR.ui.gameOver(p, newBest);
     }
 
     /* ---------- input ---------- */
@@ -253,6 +266,7 @@
       if (next.theme !== this.curTheme) {
         this.curTheme = next.theme; this.env.apply(next.theme); IR.audio.setTheme(next.theme);
         this.data.visited[next.theme.id] = 1;
+        if (IR.progress.unlock(next.theme.id)) { this.p.coins += 100; setTimeout(() => IR.ui.toast('🔓 ' + IR.ui.tr('cityUnlocked') + ' ' + next.theme.names[IR.ui.lang] + '  +100 🪙', 'mission'), 1800); }
         IR.ui.cityBanner(next.theme);
       }
     }
@@ -296,7 +310,7 @@
       let run = this.run;
       // speed
       const base = Math.min(21, 11 + p.dist * 0.0036);
-      p.speed = IR.damp(p.speed, pw.boost > 0 ? base * 1.6 : base, 3, dt);
+      p.speed = IR.damp(p.speed, pw.rath > 0 ? base * 1.75 : pw.boost > 0 ? base * 1.6 : base, 3, dt);
       p.d += p.speed * dt; p.dist += p.speed * dt;
       // lateral
       p.x = IR.damp(p.x, LANES()[p.laneI], 15, dt);
@@ -315,7 +329,7 @@
       }
       if (p.slideT > 0) p.slideT -= dt;
       // turns
-      if ((pw.glide > 0 || pw.boost > 0) && p.d > run.L - 8) p.turnQ = true;
+      if ((pw.glide > 0 || pw.boost > 0 || pw.rath > 0) && p.d > run.L - 8) p.turnQ = true;
       if (p.turnQ) { const dExec = run.turn < 0 ? run.L + p.x : run.L - p.x; if (p.d >= dExec) { this.doTurn(); run = this.run; } }
       if (this.run === run && p.d > run.L + 3.3) { if (p.invuln > 0) { this.doTurn(true); run = this.run; } else { p.d = run.L + 3.3; this.die('wall'); return; } }
       if (this.state !== 'playing') return;
@@ -327,12 +341,12 @@
         if (pw.glide > 0) continue;
         const hit = o.type === 'block' || (o.type === 'hurdle' && p.y < 0.82) || (o.type === 'banner' && !(p.slideT > 0 && p.y < 0.45));
         if (!hit) continue;
-        if (p.invuln > 0 || pw.boost > 0) this.clearObstacle(o);
+        if (p.invuln > 0 || pw.boost > 0 || pw.rath > 0) this.clearObstacle(o);
         else if (pw.shield > 0) { pw.shield = 0; p.invuln = 1; this.clearObstacle(o); IR.audio.play('shieldBreak'); }
         else { this.die('hit'); return; }
       }
       // coins
-      const magnet = pw.magnet > 0 || pw.glide > 0;
+      const magnet = pw.magnet > 0 || pw.glide > 0 || pw.rath > 0;
       const center = p.slideT > 0 ? 0.45 : 0.95;
       for (const r of [run, run.next]) {
         if (!r || !r.coinData.length) continue;
@@ -351,6 +365,24 @@
             }
           }
           if (r === run && Math.abs(-cd.lz - p.d) < 0.9 && Math.abs(cd.lx - p.x) < 0.95 && Math.abs(cd.ly - (p.y + center)) < 1.05) this.takeCoin(r, cd);
+        }
+      }
+      // hidden treasure
+      const T = run.treasure;
+      if (T && !T.taken && Math.abs(T.d - p.d) < 1.1 && Math.abs(T.x - p.x) < 1.0 && Math.abs(T.y + 0.3 - (p.y + center)) < 1.1) {
+        T.taken = true; T.g.visible = false; p.treasures++;
+        const cul = IR.CULTURE[run.theme.id], idx = Math.floor(Math.random() * cul.tr.length), isNew = IR.progress.addTreasure(run.theme.id, idx);
+        IR.audio.play('treasure'); this.fx.burst(this.ppos.clone().setY(this.ppos.y + 1.2), '#ffd36a', 50, 7, 5);
+        IR.ui.treasureCard(cul.tr[idx], isNew, run.theme);
+      }
+      // culture fact card near a monument / on entering a city
+      if (run.factD > 0 && !run.factShown && p.d > run.factD) {
+        run.factShown = true;
+        const cul = IR.CULTURE[run.theme.id];
+        if (cul && cul.facts.length) {
+          const fi = run.mon ? Math.max(0, cul.mon.indexOf(run.mon.cfg)) % cul.facts.length : (run.i % cul.facts.length), key = run.theme.id + ':' + fi;
+          if (!this.data.facts[key]) { this.data.facts[key] = 1; p.facts++; }
+          IR.ui.factCard(run.theme, cul.facts[fi], run.mon && IR.MON[run.mon.cfg.k]);
         }
       }
       // pickups
@@ -383,11 +415,20 @@
       }
       IR.audio.setIntensity(IR.clamp((p.speed - 11) / 13, 0, 1));
       this.world.update(dt, this.run, p.d);
+      IR.mp.record(dt, this.run, p);
       IR.ui.hud(p, this);
     }
     takeCoin(r, cd) {
       const p = this.p; cd.taken = true;
-      const v = p.pw.double > 0 ? 2 : 1;
+      if (cd.tok) {
+        p.tokens++; p.score += 25 * this.mult; p.combo++; p.comboT = 0.6;
+        IR.audio.play('token', p.combo);
+        this.world.toWorld(r, -cd.lz, cd.lx, cd.ly, this.tmp);
+        const cols = ['#ff3d7f', '#ffd400', '#00e0ff', '#7cff4a', '#ff7a00'];
+        this.fx.burst(this.tmp, this.festival === 'holi' ? cols[p.tokens % 5] : '#ffcf6a', this.festival === 'holi' ? 22 : 10, 4, 3, 3);
+        return;
+      }
+      const v = p.pw.double > 0 || p.pw.rath > 0 ? 2 : 1;
       p.coins += v; p.score += 10 * this.mult * v;
       p.combo++; p.comboT = 0.6;
       IR.audio.play('coin', p.combo);
@@ -412,7 +453,7 @@
       else if (!p.grounded) st = 'jump';
       else st = 'run';
       const lean = st === 'run' ? IR.clamp((LANES()[p.laneI] - p.x) * 0.12, -0.25, 0.25) : 0;
-      R.update(dt, { state: st, y: p.y || 0, speed: p.speed || 0, lean: -lean, shield: p.pw && p.pw.shield > 0, magnet: p.pw && p.pw.magnet > 0, onStep: () => IR.audio.play('step') });
+      R.update(dt, { state: st, y: p.y || 0, speed: p.speed || 0, lean: -lean, shield: p.pw && (p.pw.shield > 0 || p.pw.rath > 0), magnet: p.pw && (p.pw.magnet > 0 || p.pw.rath > 0), onStep: () => IR.audio.play('step') });
       R.root.visible = !(p.invuln > 0 && !p.dead && Math.floor(this.t * 14) % 2 === 0 && !(p.pw && p.pw.shield > 0));
       this.fx.update(dt);
       // camera
@@ -441,6 +482,8 @@
       const boost = p.pw && p.pw.boost > 0 ? 10 : 0;
       const fov = (this.state === 'select' ? 45 : s.fov + (this.portrait ? 5 : 0)) + boost + (p.speed ? (p.speed - 11) * 0.35 : 0);
       if (Math.abs(cam.fov - fov) > 0.05) { cam.fov = IR.damp(cam.fov, fov, 4, dt); cam.updateProjectionMatrix(); }
+      this.env.camYaw = this.camYaw;
+      IR.mp.updateGhost(this, dt, this.state === 'playing');
       this.env.update(dt, cam, this.ppos);
     }
     snapCamera() {

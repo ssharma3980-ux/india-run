@@ -50,6 +50,16 @@ build.py     bundler      serve.py   local/phone test server      tools/   Playw
 - Missions with a growing score multiplier, achievements, checkpoints every 1,000 m, a 7-day daily reward, an upgrade shop, unlockable characters and outfits, revive, and pause/resume.
 - Graphics settings Low / Medium / High, plus a camera FOV slider.
 
+## Culture update
+- **Famous monuments, modelled in Blender** (`tools/blender_monuments.py`, run with Blender's `bpy`): India Gate-, Qutub Minar-, Gateway of India-, Charminar-, Victoria Memorial-, Taj Mahal-, Hawa Mahal-, Lake Palace- and Vidhana Soudha-inspired landmarks (stylised interpretations, not replicas). Exported as `.glb` to `assets/monuments/`.
+- **"Did you know?" culture cards** (English / हिन्दी / ગુજરાતી) when you pass a monument or enter a city.
+- **Festivals:** Diwali (night, diyas, rangoli, fireworks), Holi (colour clouds), Navratri (lights, dhol), Uttarayan (kites), Onam (pookalam) — each with its own collectible tokens. A different festival is featured every day.
+- **Hidden treasures:** a glowing chest floats above some hurdles or under banners; collect 45 regional treasures (Banarasi silk, Pashmina, Kathakali mask…) in the Treasure Passport.
+- **Indian power-ups:** Mor Pankh Magnet, Kavach Shield, Laddoo Double Coins, Dhol Score x2, Vayu Boost, Patang Glider, Rath Dash.
+- **City unlocks:** 5 starter cities; reach new ones in Bharat Yatra (or unlock with coins). Settings → "Unlock all cities" for classrooms.
+- **Daily challenges:** 3 new tasks every day + daily chest + streak, login rewards, missions.
+- **Multiplayer:** *Challenge a Friend* (WhatsApp/copy link — your friend races your ghost on the same track) and *Pass & Play* (2–4 players on one phone).
+
 ## Runners (10, all free)
 Humans (Rocketbox, MIT): Arjun, Meera, Kabir, Zoya, Rohan, Ayesha — mocap run/idle/crouch/cheer.
 Animals (Rocketbox, MIT, procedural gallop): Sheru the Dog, Badal the Horse, Hiran the Deer, Raju the Camel.
