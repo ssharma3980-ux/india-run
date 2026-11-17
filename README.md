@@ -58,6 +58,6 @@ Animals (Rocketbox, MIT, procedural gallop): Sheru the Dog, Badal the Horse, Hir
 Add an entry to `src/world/cities2.js` (atmosphere, floor, panorama, music, obstacles, left/right/far builders) and list it in `IR.CITY_ORDER`.
 
 ## Play online (GitHub Pages)
-This repository publishes itself: every push to `main` runs `.github/workflows/pages.yml`, which deploys `index.html` (the built game) to GitHub Pages.
-One-time setup: repository **Settings → Pages → Source: GitHub Actions**. The game is then live at `https://<your-username>.github.io/india-run/`.
+Live at **https://ssharma3980-ux.github.io/india-run/** — GitHub Pages serves `index.html` (the built game) from the `main` branch root.
+One-time setup: repository **Settings → Pages → Build and deployment → Source: Deploy from a branch → `main` / `(root)` → Save**.
 After changing code in `src/`, run `python build.py` and copy `dist/india-run.html` to `index.html` before pushing.
