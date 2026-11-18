@@ -4554,7 +4554,8 @@ window.IR=window.IR||{};IR.ASSETS={"anims/f_cheer.json":"eyJuYW1lIjoiZl9jaGVlciI
   const C = window.Capacitor;
   IR.NATIVE = !!(C && C.isNativePlatform && C.isNativePlatform());
   // challenge links must point to the public website, not the app's internal localhost
-  IR.SHARE_BASE = IR.NATIVE ? 'https://ssharma3980-ux.github.io/india-run/' : null;
+  const PUBLIC = 'https://ssharma3980-ux.github.io/india-run/';
+  IR.SHARE_BASE = IR.NATIVE || /itch\.(zone|io)$/.test(location.hostname) ? PUBLIC : null;
   if (!IR.NATIVE) return;
   const P = C.Plugins || {};
   window.addEventListener('load', () => {

@@ -82,3 +82,14 @@ jobs:
             --title "India Run Android ${{ env.VERSION_NAME }}" \
             --notes "Download india-run.apk to install on an Android phone. india-run-playstore.aab (when present) is the file to upload to Google Play Console." \
             --latest
+
+      - name: Upload to itch.io (if BUTLER_API_KEY and ITCH_GAME are set)
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+          ITCH_GAME: ${{ secrets.ITCH_GAME }}
+        run: |
+          if [ -z "$BUTLER_API_KEY" ] || [ -z "$ITCH_GAME" ]; then echo "itch.io upload skipped (secrets not set)"; exit 0; fi
+          curl -sSL -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q butler.zip -d butler && chmod +x butler/butler
+          ./butler/butler push dist/web "$ITCH_GAME:html5" --userversion "$VERSION_NAME"
+          ./butler/butler push out/india-run.apk "$ITCH_GAME:android" --userversion "$VERSION_NAME"
