@@ -15,8 +15,8 @@ ORDER = [
     "core/util.js", "core/native.js", "core/textures.js", "core/materials.js", "core/audio.js",
     "world/env.js", "world/props.js", "world/themes.js", "world/cities2.js", "world/culture.js", "world/world.js",
     "entities/runner.js", "entities/avatar.js",
-    "game/progress.js", "game/multiplayer.js", "game/game.js",
-    "ui/i18n.js", "ui/i18n2.js", "ui/ui.js",
+    "game/progress.js", "game/multiplayer.js", "game/live.js", "game/game.js",
+    "ui/i18n.js", "ui/i18n2.js", "ui/i18n3.js", "ui/ui.js", "ui/ui-live.js",
     "main.js",
 ]
 

@@ -12,3 +12,5 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 window.THREE = Object.assign({}, T, { FBXLoader, GLTFLoader, Sky, Water, Lensflare, LensflareElement, EffectComposer, RenderPass, UnrealBloomPass, ShaderPass, OutputPass, SkeletonUtils });
+import { Peer } from 'peerjs';
+window.Peer = Peer;

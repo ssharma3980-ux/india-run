@@ -169,6 +169,7 @@
     toMenu() {
       IR.audio.stopMusic(); IR.audio.ctx && IR.audio.ctx.resume();
       IR.mp.removeGhost(this); IR.mp.party = null;
+      if (IR.live.st !== 'idle') IR.live.close(true);
       this.mode = null; this.cityOverride = null; this.festival = null; this.runOpts = {}; this.setupWorld(); this.makeRunner();
       this.state = 'menu'; IR.ui.toMenu();
     }
@@ -205,6 +206,7 @@
       for (const [k, v] of [['coins', p.coins], ['dist', Math.floor(p.dist)], ['jumps', p.jumps], ['slides', p.slides], ['treasure', p.treasures], ['tokens', p.tokens], ['powers', p.powers], ['facts', p.facts]]) P.dcAdd(k, v, dcDone);
       P.save();
       if (IR.mp.party) { IR.mp.partyResult(p); IR.ui.partyTurnOver(p); }
+      else if (this.runOpts && this.runOpts.live) { IR.live.finish(p); IR.ui.liveOver(p, newBest); }
       else IR.ui.gameOver(p, newBest);
     }
 
@@ -287,6 +289,12 @@
       if (this.fpsAcc > 1) { this.fps = this.fpsN / this.fpsAcc; this.fpsAcc = 0; this.fpsN = 0; }
       if (this.state === 'paused') { this.render(); return; }
       if (this.state === 'playing') this.updatePlay(dt);
+      else if (this.state === 'countdown') {
+        const before = Math.ceil(this.countT);
+        this.countT = (this.countEnd - performance.now()) / 1000; // wall clock, so both phones hit GO together
+        IR.ui.countdown(this.countT, before !== Math.ceil(this.countT));
+        if (this.countT <= 0) { this.state = 'playing'; IR.live.beganRacing(); this.clock.getDelta(); }
+      }
       else if (this.state === 'dying') {
         this.dyingT -= dt;
         if (this.p.fall) { this.p.vy -= GRAV * dt; this.p.y += this.p.vy * dt; }
@@ -447,12 +455,14 @@
       let st = 'idle';
       if (this.state === 'select') st = 'show';
       else if (this.state === 'menu') st = 'idle';
+      else if (this.state === 'countdown') st = 'idle';
       else if (p.dead) st = 'crash';
       else if (p.pw && p.pw.glide > 0) st = 'glide';
       else if (p.slideT > 0) st = 'slide';
       else if (!p.grounded) st = 'jump';
       else st = 'run';
       const lean = st === 'run' ? IR.clamp((LANES()[p.laneI] - p.x) * 0.12, -0.25, 0.25) : 0;
+      this.pState = st;
       R.update(dt, { state: st, y: p.y || 0, speed: p.speed || 0, lean: -lean, shield: p.pw && (p.pw.shield > 0 || p.pw.rath > 0), magnet: p.pw && (p.pw.magnet > 0 || p.pw.rath > 0), onStep: () => IR.audio.play('step') });
       R.root.visible = !(p.invuln > 0 && !p.dead && Math.floor(this.t * 14) % 2 === 0 && !(p.pw && p.pw.shield > 0));
       this.fx.update(dt);
@@ -484,6 +494,7 @@
       if (Math.abs(cam.fov - fov) > 0.05) { cam.fov = IR.damp(cam.fov, fov, 4, dt); cam.updateProjectionMatrix(); }
       this.env.camYaw = this.camYaw;
       IR.mp.updateGhost(this, dt, this.state === 'playing');
+      IR.live.update(dt);
       this.env.update(dt, cam, this.ppos);
     }
     snapCamera() {

@@ -33,20 +33,26 @@
   };
 
   /* ---- ghost runner replay ---- */
-  MP.makeGhost = (game, info) => {
-    MP.removeGhost(game);
-    if (!info || !info.ghost || info.ghost.length < 8) return;
-    const def = IR.CHARS.find((c) => c.id === info.ch) || IR.CHARS[0];
+  /* a see-through runner with a floating name tag (used by ghost replays and live races) */
+  MP.ghostRunner = (game, ch, label, opacity = 0.55, color = '#ffe08a') => {
+    const def = IR.CHARS.find((c) => c.id === ch) || IR.CHARS[0];
     let runner;
     try { runner = IR.Avatars.models[def.id] ? (def.animal ? new IR.AnimalRunner(def, 0) : new IR.AvatarRunner(def, 0)) : null; } catch (e) { runner = null; }
-    if (!runner) return;
-    runner.root.traverse((m) => { if (m.isMesh && m.material && !m.material.isShaderMaterial) { m.material = [].concat(m.material).map((mm) => { const c = mm.clone(); c.transparent = true; c.opacity = 0.55; c.depthWrite = false; return c; }); if (m.material.length === 1) m.material = m.material[0]; m.castShadow = false; } });
+    if (!runner) return null;
+    if (opacity < 1) runner.root.traverse((m) => { if (m.isMesh && m.material && !m.material.isShaderMaterial) { m.material = [].concat(m.material).map((mm) => { const c = mm.clone(); c.transparent = true; c.opacity = opacity; c.depthWrite = false; return c; }); if (m.material.length === 1) m.material = m.material[0]; m.castShadow = false; } });
     const c = IR.tex.cv(256, 64), x = c.getContext('2d');
     x.fillStyle = 'rgba(20,10,40,.75)'; x.beginPath(); x.roundRect ? x.roundRect(4, 4, 248, 56, 28) : x.rect(4, 4, 248, 56); x.fill();
-    x.fillStyle = '#ffe08a'; x.font = '700 30px system-ui,sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('👻 ' + (info.n || 'Friend').slice(0, 12), 128, 34);
+    x.fillStyle = color; x.font = '700 30px system-ui,sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(label.slice(0, 16), 128, 34);
     const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthWrite: false, depthTest: false, toneMapped: false }));
     tag.scale.set(1.8, 0.45, 1); tag.position.y = (runner.height || 1.8) + 0.6; runner.root.add(tag);
     game.scene.add(runner.root);
+    return runner;
+  };
+  MP.makeGhost = (game, info) => {
+    MP.removeGhost(game);
+    if (!info || !info.ghost || info.ghost.length < 8) return;
+    const runner = MP.ghostRunner(game, info.ch, '👻 ' + (info.n || 'Friend').slice(0, 12));
+    if (!runner) return;
     MP.ghost = { runner, data: info.ghost, t: 0, name: info.n || 'Friend', done: false, pos: new THREE.Vector3(), d: 0 };
   };
   MP.removeGhost = (game) => { if (MP.ghost) { game.scene.remove(MP.ghost.runner.root); MP.ghost = null; } };
