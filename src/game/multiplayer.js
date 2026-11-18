@@ -19,7 +19,7 @@
     const meta = new TextEncoder().encode(JSON.stringify(info));
     const out = new Uint8Array(2 + meta.length + g.byteLength);
     out[0] = meta.length & 255; out[1] = meta.length >> 8; out.set(meta, 2); out.set(new Uint8Array(g.buffer), 2 + meta.length);
-    return location.href.split('#')[0] + '#c=' + b64u(out);
+    return (IR.SHARE_BASE || location.href.split('#')[0]) + '#c=' + b64u(out);
   };
   MP.parseLink = (hash) => {
     try {

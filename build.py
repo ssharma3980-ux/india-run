@@ -12,7 +12,7 @@ import base64, os, pathlib, subprocess, shutil, sys
 ROOT = pathlib.Path(__file__).resolve().parent
 SRC = ROOT / "src"
 ORDER = [
-    "core/util.js", "core/textures.js", "core/materials.js", "core/audio.js",
+    "core/util.js", "core/native.js", "core/textures.js", "core/materials.js", "core/audio.js",
     "world/env.js", "world/props.js", "world/themes.js", "world/cities2.js", "world/culture.js", "world/world.js",
     "entities/runner.js", "entities/avatar.js",
     "game/progress.js", "game/multiplayer.js", "game/game.js",
