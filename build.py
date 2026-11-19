@@ -96,9 +96,27 @@ def build_split(out):
     print(f"Built dist/web/ (index.html {kb:,.0f} KB + assets/)")
 
 
+def build_site(out):
+    """dist/site/: fast web version. The page carries no embedded assets; the browser fetches the
+    original files from assets/ in parallel and caches them (GitHub Pages, itch.io, Android app)."""
+    site = out / "site"
+    if site.exists():
+        shutil.rmtree(site)
+    shutil.copytree(ROOT / "assets", site / "assets", ignore=shutil.ignore_patterns("*.md", "*.txt"))
+    html = (out / "india-run.html").read_text(encoding="utf-8")
+    a = html.index("<script>/* Microsoft Rocketbox avatars & mocap (MIT) */")
+    b = html.index("</script>", a) + len("</script>")
+    (site / "index.html").write_text(html[:a] + html[b:], encoding="utf-8")
+    kb = (site / "index.html").stat().st_size / 1024
+    print(f"Built dist/site/ (index.html {kb:,.0f} KB + assets/)")
+    return site
+
+
 if __name__ == "__main__":
     o = build()
     if "--split" in sys.argv:
         build_split(o)
+    if "--site" in sys.argv:
+        build_site(o)
     if "--check" in sys.argv and not check(o):
         sys.exit(1)

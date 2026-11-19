@@ -45,7 +45,7 @@
   const Lib = (IR.Avatars = { models: {}, clips: {}, ready: false });
   Lib.load = async (onProgress) => {
     const clipNames = ['m_run', 'f_run', 'm_idle', 'f_idle', 'm_crouch', 'f_crouch', 'm_cheer', 'f_cheer'];
-    let done = 0; const total = clipNames.length + IR.CHARS.length;
+    let done = 0; const total = clipNames.length + 1;
     const tick = () => onProgress && onProgress(++done / total);
     await Promise.all(clipNames.map(async (n) => {
       const j = await (await fetch(IR.assetURL('anims/' + n + '.json'))).json();
@@ -55,7 +55,10 @@
     }));
     const tl = new THREE.TextureLoader();
     const tex = (p, srgb) => { const t = tl.load(IR.assetURL(p)); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
-    for (const c of IR.CHARS) {
+    const inflight = {};
+    const loadChar = (c) => inflight[c.id] || (inflight[c.id] = loadCharRaw(c));
+    const loadCharRaw = async (c) => {
+      if (Lib.models[c.id]) return;
       try {
         const url = IR.assetURL(`characters/${c.model}/${c.model}.fbx`);
         const obj = await new Promise((res, rej) => new THREE.FBXLoader().load(url, res, undefined, rej));
@@ -73,7 +76,7 @@
             m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
           });
           obj.scale.setScalar(c.scale);
-          Lib.models[c.id] = obj; tick(); continue;
+          Lib.models[c.id] = obj; return;
         }
         obj.traverse((m) => {
           if (!m.isMesh) return;
@@ -89,9 +92,27 @@
         obj.scale.setScalar(0.01);
         Lib.models[c.id] = obj;
       } catch (e) { console.warn('avatar failed', c.id, e); }
-      tick();
-    }
+    };
+    Lib.loadChar = loadChar;
+    // only the chosen runner is loaded before the menu appears; the rest load quietly afterwards
+    const first = IR.CHARS.find((c) => c.id === (IR.progress.data && IR.progress.data.char)) || IR.CHARS[0];
+    await loadChar(first); tick();
     Lib.ready = Object.keys(Lib.models).length > 0;
+    Lib.rest = (async () => {
+      for (const c of IR.CHARS) {
+        if (Lib.models[c.id]) continue;
+        // never parse a model while a run is on screen
+        while (window.game && game.state !== 'menu' && game.state !== 'select' && game.state !== 'over' && game.state !== 'loading') await new Promise((r) => setTimeout(r, 1500));
+        await new Promise((r) => setTimeout(r, 120));
+        await loadChar(c);
+        IR.ui && IR.ui.onAvatarLoaded && IR.ui.onAvatarLoaded(c.id);
+      }
+    })();
+  };
+  Lib.ensure = async (id) => {
+    if (Lib.models[id]) return true;
+    const c = IR.CHARS.find((x) => x.id === id); if (!c || !Lib.loadChar) return false;
+    await Lib.loadChar(c); IR.ui && IR.ui.onAvatarLoaded && IR.ui.onAvatarLoaded(id); return !!Lib.models[id];
   };
 
   function scarfTexture(o) {

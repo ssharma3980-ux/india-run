@@ -28,13 +28,13 @@ jobs:
           java-version: 21
 
       - name: Build game (web files)
-        run: python3 build.py --split
+        run: python3 build.py --site
 
       - name: Prepare Capacitor Android project
         working-directory: app
         run: |
           npm ci || npm install
-          rm -rf www && cp -r ../dist/web www
+          rm -rf www && cp -r ../dist/site www
           npx cap sync android
 
       - name: Restore upload keystore (if secrets are set)
@@ -91,5 +91,5 @@ jobs:
           if [ -z "$BUTLER_API_KEY" ] || [ -z "$ITCH_GAME" ]; then echo "itch.io upload skipped (secrets not set)"; exit 0; fi
           curl -sSL -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
           unzip -q butler.zip -d butler && chmod +x butler/butler
-          ./butler/butler push dist/web "$ITCH_GAME:html5" --userversion "$VERSION_NAME"
+          ./butler/butler push dist/site "$ITCH_GAME:html5" --userversion "$VERSION_NAME"
           ./butler/butler push out/india-run.apk "$ITCH_GAME:android" --userversion "$VERSION_NAME"

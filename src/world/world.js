@@ -79,8 +79,61 @@
         for (const [e0, e1] of cutRange(s, i === 0 ? -60 : run.startTurn === s ? 132 : 12, L - 12))
           for (let a = e0; a < e1 - 4; a += 36) { const b0 = a, b1 = Math.min(a + 36, e1), seed = this.seed * 17 + i * 131 + Math.round(a); this.jobs.push(() => this.buildFar(run, s, b0, b1, seed)); }
       }
+      this.jobs.push(() => this.planMerge(run));
       this.jobs.push(() => { run.ready = true; });
       return run;
+    }
+
+    /* fewer draw calls: once a run is built, its static batched pieces that share a material are
+       merged into one mesh per 160 m stretch (a few hundred draw calls become a few dozen) */
+    planMerge(run) {
+      const groups = new Map();
+      for (const m of run.group.children) {
+        if (m.isPoints && m.geometry.userData.own) { // lamp/diya glows
+          const key = 'pts' + m.material.uuid; let l = groups.get(key); if (!l) groups.set(key, (l = [])); l.push(m); continue;
+        }
+        if (!m.isMesh || m.isInstancedMesh || m.matrixAutoUpdate || !m.geometry.userData.own || m.geometry.index) continue;
+        const a = m.geometry.attributes;
+        if (!a.position || !a.normal || !a.uv || Object.keys(a).length !== 3 || Array.isArray(m.material)) continue;
+        if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
+        const cell = Math.floor(-m.geometry.boundingSphere.center.z / 160);
+        const key = m.material.uuid + (m.castShadow ? 'c' : '') + (m.receiveShadow ? 'r' : '') + cell;
+        let l = groups.get(key); if (!l) groups.set(key, (l = []));
+        l.push(m);
+      }
+      const lists = [...groups.values()].filter((l) => l.length > 1);
+      // merge in small slices so no single frame does too much work
+      for (let i = 0; i < lists.length; i += 6) { const part = lists.slice(i, i + 6); this.jobs.unshift(() => part.forEach((l) => this.mergeMeshes(run, l))); }
+    }
+    mergeMeshes(run, list) {
+      if (!list[0].parent) return;
+      if (list[0].isPoints) {
+        let n = 0; for (const m of list) n += m.geometry.attributes.position.count;
+        const pos = new Float32Array(n * 3); let o = 0;
+        for (const m of list) { pos.set(m.geometry.attributes.position.array, o * 3); o += m.geometry.attributes.position.count; }
+        const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.userData.own = true;
+        run.group.add(new THREE.Points(geo, list[0].material));
+        for (const m of list) { run.group.remove(m); m.geometry.dispose(); }
+        return;
+      }
+      let n = 0; for (const m of list) n += m.geometry.attributes.position.count;
+      const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), uv = new Float32Array(n * 2);
+      let o = 0;
+      for (const m of list) {
+        const a = m.geometry.attributes, c = a.position.count;
+        pos.set(a.position.array, o * 3); nor.set(a.normal.array, o * 3); uv.set(a.uv.array, o * 2);
+        o += c;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+      geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      geo.computeBoundingSphere(); geo.userData.own = true;
+      const f = list[0], mesh = new THREE.Mesh(geo, f.material);
+      mesh.castShadow = f.castShadow; mesh.receiveShadow = f.receiveShadow;
+      mesh.matrixAutoUpdate = false; mesh.updateMatrix();
+      run.group.add(mesh);
+      for (const m of list) { run.group.remove(m); m.geometry.dispose(); }
     }
 
     plan(run, r) {

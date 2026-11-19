@@ -113,7 +113,7 @@
 
     makeReflectiveWater() {
       if (this.waterRefl) return;
-      const q = this.quality === 'high' ? 512 : 256;
+      const q = 256;
       this.waterRefl = new THREE.Water(new THREE.PlaneGeometry(1400, 1400), {
         textureWidth: q, textureHeight: q, waterNormals: this.waterN2, sunDirection: this.sunDir.clone(), sunColor: 0xffffff, waterColor: 0x3d5f66, distortionScale: 2.2, fog: true, alpha: 1,
       });
@@ -130,7 +130,7 @@
         this.sun.shadow.mapSize.set(s, s);
         if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; }
       }
-      if (q !== 'low') this.makeReflectiveWater();
+      if (q === 'high') this.makeReflectiveWater(); // reflective water draws the whole scene twice: High only
       if (this.theme) this.apply(this.theme);
     }
 
@@ -161,7 +161,7 @@
       this.scene.environment = this.envRT.texture;
       this.scene.environmentIntensity = 1;
       // floor
-      const f = th.floor, refl = this.quality !== 'low' && this.waterRefl;
+      const f = th.floor, refl = this.quality === 'high' && this.waterRefl;
       this.water = refl ? this.waterRefl : this.waterPBR;
       this.waterPBR.visible = f.type === 'water' && !refl;
       if (this.waterRefl) this.waterRefl.visible = f.type === 'water' && !!refl;

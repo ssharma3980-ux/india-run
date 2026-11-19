@@ -92,6 +92,7 @@
     switch (m.t) {
       case 'hi':
         L.friend = { n: String(m.n || 'Friend').slice(0, 14), ch: m.ch, last: null, end: null };
+        IR.Avatars.ensure(m.ch); // load the friend's runner while still in the lobby
         emit('friend', L.friend);
         break;
       case 'busy': fail({ type: 'busy' }); break;

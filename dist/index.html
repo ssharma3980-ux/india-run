@@ -5485,7 +5485,7 @@ window.IR=window.IR||{};IR.ASSETS={"anims/f_cheer.json":"eyJuYW1lIjoiZl9jaGVlciI
 
     makeReflectiveWater() {
       if (this.waterRefl) return;
-      const q = this.quality === 'high' ? 512 : 256;
+      const q = 256;
       this.waterRefl = new THREE.Water(new THREE.PlaneGeometry(1400, 1400), {
         textureWidth: q, textureHeight: q, waterNormals: this.waterN2, sunDirection: this.sunDir.clone(), sunColor: 0xffffff, waterColor: 0x3d5f66, distortionScale: 2.2, fog: true, alpha: 1,
       });
@@ -5502,7 +5502,7 @@ window.IR=window.IR||{};IR.ASSETS={"anims/f_cheer.json":"eyJuYW1lIjoiZl9jaGVlciI
         this.sun.shadow.mapSize.set(s, s);
         if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; }
       }
-      if (q !== 'low') this.makeReflectiveWater();
+      if (q === 'high') this.makeReflectiveWater(); // reflective water draws the whole scene twice: High only
       if (this.theme) this.apply(this.theme);
     }
 
@@ -5533,7 +5533,7 @@ window.IR=window.IR||{};IR.ASSETS={"anims/f_cheer.json":"eyJuYW1lIjoiZl9jaGVlciI
       this.scene.environment = this.envRT.texture;
       this.scene.environmentIntensity = 1;
       // floor
-      const f = th.floor, refl = this.quality !== 'low' && this.waterRefl;
+      const f = th.floor, refl = this.quality === 'high' && this.waterRefl;
       this.water = refl ? this.waterRefl : this.waterPBR;
       this.waterPBR.visible = f.type === 'water' && !refl;
       if (this.waterRefl) this.waterRefl.visible = f.type === 'water' && !!refl;
@@ -6967,8 +6967,61 @@ window.IR=window.IR||{};IR.ASSETS={"anims/f_cheer.json":"eyJuYW1lIjoiZl9jaGVlciI
         for (const [e0, e1] of cutRange(s, i === 0 ? -60 : run.startTurn === s ? 132 : 12, L - 12))
           for (let a = e0; a < e1 - 4; a += 36) { const b0 = a, b1 = Math.min(a + 36, e1), seed = this.seed * 17 + i * 131 + Math.round(a); this.jobs.push(() => this.buildFar(run, s, b0, b1, seed)); }
       }
+      this.jobs.push(() => this.planMerge(run));
       this.jobs.push(() => { run.ready = true; });
       return run;
+    }
+
+    /* fewer draw calls: once a run is built, its static batched pieces that share a material are
+       merged into one mesh per 160 m stretch (a few hundred draw calls become a few dozen) */
+    planMerge(run) {
+      const groups = new Map();
+      for (const m of run.group.children) {
+        if (m.isPoints && m.geometry.userData.own) { // lamp/diya glows
+          const key = 'pts' + m.material.uuid; let l = groups.get(key); if (!l) groups.set(key, (l = [])); l.push(m); continue;
+        }
+        if (!m.isMesh || m.isInstancedMesh || m.matrixAutoUpdate || !m.geometry.userData.own || m.geometry.index) continue;
+        const a = m.geometry.attributes;
+        if (!a.position || !a.normal || !a.uv || Object.keys(a).length !== 3 || Array.isArray(m.material)) continue;
+        if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
+        const cell = Math.floor(-m.geometry.boundingSphere.center.z / 160);
+        const key = m.material.uuid + (m.castShadow ? 'c' : '') + (m.receiveShadow ? 'r' : '') + cell;
+        let l = groups.get(key); if (!l) groups.set(key, (l = []));
+        l.push(m);
+      }
+      const lists = [...groups.values()].filter((l) => l.length > 1);
+      // merge in small slices so no single frame does too much work
+      for (let i = 0; i < lists.length; i += 6) { const part = lists.slice(i, i + 6); this.jobs.unshift(() => part.forEach((l) => this.mergeMeshes(run, l))); }
+    }
+    mergeMeshes(run, list) {
+      if (!list[0].parent) return;
+      if (list[0].isPoints) {
+        let n = 0; for (const m of list) n += m.geometry.attributes.position.count;
+        const pos = new Float32Array(n * 3); let o = 0;
+        for (const m of list) { pos.set(m.geometry.attributes.position.array, o * 3); o += m.geometry.attributes.position.count; }
+        const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.userData.own = true;
+        run.group.add(new THREE.Points(geo, list[0].material));
+        for (const m of list) { run.group.remove(m); m.geometry.dispose(); }
+        return;
+      }
+      let n = 0; for (const m of list) n += m.geometry.attributes.position.count;
+      const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), uv = new Float32Array(n * 2);
+      let o = 0;
+      for (const m of list) {
+        const a = m.geometry.attributes, c = a.position.count;
+        pos.set(a.position.array, o * 3); nor.set(a.normal.array, o * 3); uv.set(a.uv.array, o * 2);
+        o += c;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+      geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      geo.computeBoundingSphere(); geo.userData.own = true;
+      const f = list[0], mesh = new THREE.Mesh(geo, f.material);
+      mesh.castShadow = f.castShadow; mesh.receiveShadow = f.receiveShadow;
+      mesh.matrixAutoUpdate = false; mesh.updateMatrix();
+      run.group.add(mesh);
+      for (const m of list) { run.group.remove(m); m.geometry.dispose(); }
     }
 
     plan(run, r) {
@@ -7537,7 +7590,7 @@ window.IR=window.IR||{};IR.ASSETS={"anims/f_cheer.json":"eyJuYW1lIjoiZl9jaGVlciI
   const Lib = (IR.Avatars = { models: {}, clips: {}, ready: false });
   Lib.load = async (onProgress) => {
     const clipNames = ['m_run', 'f_run', 'm_idle', 'f_idle', 'm_crouch', 'f_crouch', 'm_cheer', 'f_cheer'];
-    let done = 0; const total = clipNames.length + IR.CHARS.length;
+    let done = 0; const total = clipNames.length + 1;
     const tick = () => onProgress && onProgress(++done / total);
     await Promise.all(clipNames.map(async (n) => {
       const j = await (await fetch(IR.assetURL('anims/' + n + '.json'))).json();
@@ -7547,7 +7600,10 @@ window.IR=window.IR||{};IR.ASSETS={"anims/f_cheer.json":"eyJuYW1lIjoiZl9jaGVlciI
     }));
     const tl = new THREE.TextureLoader();
     const tex = (p, srgb) => { const t = tl.load(IR.assetURL(p)); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
-    for (const c of IR.CHARS) {
+    const inflight = {};
+    const loadChar = (c) => inflight[c.id] || (inflight[c.id] = loadCharRaw(c));
+    const loadCharRaw = async (c) => {
+      if (Lib.models[c.id]) return;
       try {
         const url = IR.assetURL(`characters/${c.model}/${c.model}.fbx`);
         const obj = await new Promise((res, rej) => new THREE.FBXLoader().load(url, res, undefined, rej));
@@ -7565,7 +7621,7 @@ window.IR=window.IR||{};IR.ASSETS={"anims/f_cheer.json":"eyJuYW1lIjoiZl9jaGVlciI
             m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
           });
           obj.scale.setScalar(c.scale);
-          Lib.models[c.id] = obj; tick(); continue;
+          Lib.models[c.id] = obj; return;
         }
         obj.traverse((m) => {
           if (!m.isMesh) return;
@@ -7581,9 +7637,27 @@ window.IR=window.IR||{};IR.ASSETS={"anims/f_cheer.json":"eyJuYW1lIjoiZl9jaGVlciI
         obj.scale.setScalar(0.01);
         Lib.models[c.id] = obj;
       } catch (e) { console.warn('avatar failed', c.id, e); }
-      tick();
-    }
+    };
+    Lib.loadChar = loadChar;
+    // only the chosen runner is loaded before the menu appears; the rest load quietly afterwards
+    const first = IR.CHARS.find((c) => c.id === (IR.progress.data && IR.progress.data.char)) || IR.CHARS[0];
+    await loadChar(first); tick();
     Lib.ready = Object.keys(Lib.models).length > 0;
+    Lib.rest = (async () => {
+      for (const c of IR.CHARS) {
+        if (Lib.models[c.id]) continue;
+        // never parse a model while a run is on screen
+        while (window.game && game.state !== 'menu' && game.state !== 'select' && game.state !== 'over' && game.state !== 'loading') await new Promise((r) => setTimeout(r, 1500));
+        await new Promise((r) => setTimeout(r, 120));
+        await loadChar(c);
+        IR.ui && IR.ui.onAvatarLoaded && IR.ui.onAvatarLoaded(c.id);
+      }
+    })();
+  };
+  Lib.ensure = async (id) => {
+    if (Lib.models[id]) return true;
+    const c = IR.CHARS.find((x) => x.id === id); if (!c || !Lib.loadChar) return false;
+    await Lib.loadChar(c); IR.ui && IR.ui.onAvatarLoaded && IR.ui.onAvatarLoaded(id); return !!Lib.models[id];
   };
 
   function scarfTexture(o) {
@@ -7801,13 +7875,15 @@ window.IR=window.IR||{};IR.ASSETS={"anims/f_cheer.json":"eyJuYW1lIjoiZl9jaGVlciI
     dc: { day: '', tasks: [], prog: {}, claimed: [], chest: false, streak: 0, lastDone: '' },
     mLevel: 0, missions: null, ach: {}, visited: {},
     daily: { last: '', streak: 0 }, challenge: { day: '', done: false },
-    settings: { quality: 'high', fov: 70, music: true, sfx: true, lang: 'en', tutorial: true, allCities: false },
+    settings: { quality: 'med', fov: 70, music: true, sfx: true, lang: 'en', tutorial: true, allCities: false },
   });
   const P = (IR.progress = { data: null });
   P.load = () => {
     const d = IR.store.get(KEY, null), base = def();
     P.data = d ? Object.assign(base, d, { settings: Object.assign(base.settings, d.settings || {}), upgrades: Object.assign(base.upgrades, d.upgrades || {}), unlocked: Object.assign(base.unlocked, d.unlocked || {}) }) : base;
     if (!P.data.missions) P.newMissions();
+    // v2 performance defaults: players who never chose a quality move from High to Medium
+    if (!P.data.perfV) { if (!P.data.settings.manualQ) P.data.settings.quality = 'med'; P.data.perfV = 1; }
     return P.data;
   };
   P.save = () => IR.store.set(KEY, P.data);
@@ -8109,6 +8185,7 @@ window.IR=window.IR||{};IR.ASSETS={"anims/f_cheer.json":"eyJuYW1lIjoiZl9jaGVlciI
     switch (m.t) {
       case 'hi':
         L.friend = { n: String(m.n || 'Friend').slice(0, 14), ch: m.ch, last: null, end: null };
+        IR.Avatars.ensure(m.ch); // load the friend's runner while still in the lobby
         emit('friend', L.friend);
         break;
       case 'busy': fail({ type: 'busy' }); break;
@@ -8296,9 +8373,16 @@ window.IR=window.IR||{};IR.ASSETS={"anims/f_cheer.json":"eyJuYW1lIjoiZl9jaGVlciI
 
     applySettings() {
       const s = this.data.settings, dpr = window.devicePixelRatio || 1;
-      this.renderer.setPixelRatio(s.quality === 'low' ? Math.min(dpr, 1) * 0.85 : s.quality === 'high' ? Math.min(dpr, 2) : Math.min(dpr, 1.5));
+      // big laptop screens: cap the number of pixels we draw, then let dynamic resolution fine-tune
+      const px = innerWidth * innerHeight, bigScreen = px > 1.2e6 ? Math.sqrt(1.2e6 / px) : 1;
+      this.basePR = s.quality === 'low' ? Math.min(dpr, 1) * 0.75 : s.quality === 'high' ? Math.min(dpr, 2) : Math.min(dpr, 1.25) * bigScreen;
+      if (s.quality === 'high') this.basePR = Math.max(this.basePR * Math.min(1, bigScreen * 1.3), 0.8);
+      this.resScale = this.resScale || 1;
+      this.renderer.setPixelRatio(this.basePR * this.resScale);
       this.env && this.env.setQuality(s.quality);
       this.renderer.shadowMap.enabled = s.quality !== 'low';
+      this.renderer.shadowMap.type = s.quality === 'high' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+      this.renderer.shadowMap.needsUpdate = true;
       if (this.bloom) this.bloom.enabled = s.quality === 'high';
       IR.audio.setMusic(s.music); IR.audio.setSfx(s.sfx);
       this.resize();
@@ -8353,7 +8437,8 @@ window.IR=window.IR||{};IR.ASSETS={"anims/f_cheer.json":"eyJuYW1lIjoiZl9jaGVlciI
       } catch (e) { console.warn('post-processing unavailable', e); this.composer = null; }
     }
     render() {
-      if (this.composer && this.data.settings.quality !== 'low') this.composer.render();
+      // the post-processing chain (bloom + colour grade) only runs on High; Medium/Low draw straight to the screen
+      if (this.composer && this.data.settings.quality === 'high') this.composer.render();
       else this.renderer.render(this.scene, this.camera);
     }
 
@@ -8514,6 +8599,7 @@ window.IR=window.IR||{};IR.ASSETS={"anims/f_cheer.json":"eyJuYW1lIjoiZl9jaGVlciI
       this.t += dt;
       this.fpsAcc += dt; this.fpsN++;
       if (this.fpsAcc > 1) { this.fps = this.fpsN / this.fpsAcc; this.fpsAcc = 0; this.fpsN = 0; }
+      this.dynamicRes(dt);
       if (this.state === 'paused') { this.render(); return; }
       if (this.state === 'playing') this.updatePlay(dt);
       else if (this.state === 'countdown') {
@@ -8532,10 +8618,26 @@ window.IR=window.IR||{};IR.ASSETS={"anims/f_cheer.json":"eyJuYW1lIjoiZl9jaGVlciI
       this.render();
       this.adaptQuality(dt);
     }
+    /* dynamic resolution: render fewer pixels when frames are slow, more when there is headroom */
+    dynamicRes(dt) {
+      this.drAcc = (this.drAcc || 0) + dt; this.drN = (this.drN || 0) + 1;
+      if (this.drAcc < 0.6) return;
+      const fps = this.drN / this.drAcc; this.drAcc = 0; this.drN = 0;
+      if (document.hidden || this.state === 'loading') return;
+      let k = this.resScale || 1;
+      if (fps < 42) k *= fps < 28 ? 0.8 : 0.9;
+      else if (fps > 56 && k < 1) k = Math.min(1, k * 1.06);
+      k = Math.max(0.5, k);
+      if (Math.abs(k - (this.resScale || 1)) > 0.02) {
+        this.resScale = k;
+        this.renderer.setPixelRatio(this.basePR * k);
+        this.resize();
+      }
+    }
     adaptQuality(dt) {
       if (this.state !== 'playing') { this.lowT = 0; return; }
       const s = this.data.settings;
-      if (this.fps < 34 && s.quality !== 'low' && !s.manualQ) {
+      if (this.fps < 34 && (this.resScale || 1) <= 0.55 && s.quality !== 'low' && !s.manualQ) {
         this.lowT = (this.lowT || 0) + dt;
         if (this.lowT > 5) { s.quality = s.quality === 'high' ? 'med' : 'low'; this.lowT = 0; this.applySettings(); IR.progress.save(); IR.ui.toast('⚙️ ' + IR.ui.tr('quality') + ': ' + IR.ui.tr(s.quality)); }
       } else this.lowT = 0;
@@ -9057,6 +9159,7 @@ window.IR=window.IR||{};IR.ASSETS={"anims/f_cheer.json":"eyJuYW1lIjoiZl9jaGVlciI
     renderChar() {
       const c = IR.CHARS[this.charIdx], d = this.g.data;
       this.g.previewChar = c.id; this.g.previewOutfit = this.outfitIdx; this.g.makeRunner();
+      if (!IR.Avatars.models[c.id]) IR.Avatars.ensure(c.id);
       $('#cName').textContent = c.name[this.lang]; $('#cFrom').textContent = (c.animal ? '🐾 ' : '📍 ') + c.from[this.lang];
       $('#cDots').innerHTML = IR.CHARS.map((x, i) => `<i class="${i === this.charIdx ? 'on' : ''}"></i>`).join('');
       const box = $('#cOutfits'); box.innerHTML = '';
@@ -9138,7 +9241,13 @@ window.IR=window.IR||{};IR.ASSETS={"anims/f_cheer.json":"eyJuYW1lIjoiZl9jaGVlciI
       if (done) { $('#bPA').onclick = () => { IR.mp.startParty(P.players.map((x) => x.name), Object.assign({}, P.opts, { seed: (Math.random() * 1e9) | 0 })); this.partyNext(); }; $('#bPH').onclick = () => this.g.toMenu(); }
       else $('#bPN').onclick = () => this.partyNext();
     },
+    /* a runner model finished loading in the background: swap it in if it is the one on screen */
+    onAvatarLoaded(id) {
+      const g = this.g; if (!g || !(g.state === 'menu' || g.state === 'select' || g.state === 'over')) return;
+      if ((g.previewChar || g.data.char) === id && !(g.runner instanceof IR.AvatarRunner || g.runner instanceof IR.AnimalRunner)) g.makeRunner();
+    },
     incoming(info) {
+      if (info && info.ch) IR.Avatars.ensure(info.ch);
       const th = IR.THEMES[info.c] || IR.THEMES.varanasi;
       $('#incomingBody').innerHTML = `<div class="bigIcon">👻</div><h2>${esc(info.n || 'Friend')} ${this.tr('challenges')}</h2>
         <p class="muted">${th.icon} ${th.names[this.lang]}${info.f && IR.FESTIVALS[info.f] ? ' · ' + IR.FESTIVALS[info.f].icon : ''}</p><div class="stats two"><div><small>${this.tr('beat')}</small><b>${fmt(info.sc || 0)}</b></div><div><small>${this.tr('distance')}</small><b>${fmt(info.ds || 0)} m</b></div></div>

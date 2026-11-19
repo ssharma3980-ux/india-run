@@ -10,13 +10,15 @@
     dc: { day: '', tasks: [], prog: {}, claimed: [], chest: false, streak: 0, lastDone: '' },
     mLevel: 0, missions: null, ach: {}, visited: {},
     daily: { last: '', streak: 0 }, challenge: { day: '', done: false },
-    settings: { quality: 'high', fov: 70, music: true, sfx: true, lang: 'en', tutorial: true, allCities: false },
+    settings: { quality: 'med', fov: 70, music: true, sfx: true, lang: 'en', tutorial: true, allCities: false },
   });
   const P = (IR.progress = { data: null });
   P.load = () => {
     const d = IR.store.get(KEY, null), base = def();
     P.data = d ? Object.assign(base, d, { settings: Object.assign(base.settings, d.settings || {}), upgrades: Object.assign(base.upgrades, d.upgrades || {}), unlocked: Object.assign(base.unlocked, d.unlocked || {}) }) : base;
     if (!P.data.missions) P.newMissions();
+    // v2 performance defaults: players who never chose a quality move from High to Medium
+    if (!P.data.perfV) { if (!P.data.settings.manualQ) P.data.settings.quality = 'med'; P.data.perfV = 1; }
     return P.data;
   };
   P.save = () => IR.store.set(KEY, P.data);

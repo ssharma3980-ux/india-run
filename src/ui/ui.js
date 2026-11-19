@@ -182,6 +182,7 @@
     renderChar() {
       const c = IR.CHARS[this.charIdx], d = this.g.data;
       this.g.previewChar = c.id; this.g.previewOutfit = this.outfitIdx; this.g.makeRunner();
+      if (!IR.Avatars.models[c.id]) IR.Avatars.ensure(c.id);
       $('#cName').textContent = c.name[this.lang]; $('#cFrom').textContent = (c.animal ? '🐾 ' : '📍 ') + c.from[this.lang];
       $('#cDots').innerHTML = IR.CHARS.map((x, i) => `<i class="${i === this.charIdx ? 'on' : ''}"></i>`).join('');
       const box = $('#cOutfits'); box.innerHTML = '';
@@ -263,7 +264,13 @@
       if (done) { $('#bPA').onclick = () => { IR.mp.startParty(P.players.map((x) => x.name), Object.assign({}, P.opts, { seed: (Math.random() * 1e9) | 0 })); this.partyNext(); }; $('#bPH').onclick = () => this.g.toMenu(); }
       else $('#bPN').onclick = () => this.partyNext();
     },
+    /* a runner model finished loading in the background: swap it in if it is the one on screen */
+    onAvatarLoaded(id) {
+      const g = this.g; if (!g || !(g.state === 'menu' || g.state === 'select' || g.state === 'over')) return;
+      if ((g.previewChar || g.data.char) === id && !(g.runner instanceof IR.AvatarRunner || g.runner instanceof IR.AnimalRunner)) g.makeRunner();
+    },
     incoming(info) {
+      if (info && info.ch) IR.Avatars.ensure(info.ch);
       const th = IR.THEMES[info.c] || IR.THEMES.varanasi;
       $('#incomingBody').innerHTML = `<div class="bigIcon">👻</div><h2>${esc(info.n || 'Friend')} ${this.tr('challenges')}</h2>
         <p class="muted">${th.icon} ${th.names[this.lang]}${info.f && IR.FESTIVALS[info.f] ? ' · ' + IR.FESTIVALS[info.f].icon : ''}</p><div class="stats two"><div><small>${this.tr('beat')}</small><b>${fmt(info.sc || 0)}</b></div><div><small>${this.tr('distance')}</small><b>${fmt(info.ds || 0)} m</b></div></div>

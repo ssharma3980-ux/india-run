@@ -72,9 +72,16 @@
 
     applySettings() {
       const s = this.data.settings, dpr = window.devicePixelRatio || 1;
-      this.renderer.setPixelRatio(s.quality === 'low' ? Math.min(dpr, 1) * 0.85 : s.quality === 'high' ? Math.min(dpr, 2) : Math.min(dpr, 1.5));
+      // big laptop screens: cap the number of pixels we draw, then let dynamic resolution fine-tune
+      const px = innerWidth * innerHeight, bigScreen = px > 1.2e6 ? Math.sqrt(1.2e6 / px) : 1;
+      this.basePR = s.quality === 'low' ? Math.min(dpr, 1) * 0.75 : s.quality === 'high' ? Math.min(dpr, 2) : Math.min(dpr, 1.25) * bigScreen;
+      if (s.quality === 'high') this.basePR = Math.max(this.basePR * Math.min(1, bigScreen * 1.3), 0.8);
+      this.resScale = this.resScale || 1;
+      this.renderer.setPixelRatio(this.basePR * this.resScale);
       this.env && this.env.setQuality(s.quality);
       this.renderer.shadowMap.enabled = s.quality !== 'low';
+      this.renderer.shadowMap.type = s.quality === 'high' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+      this.renderer.shadowMap.needsUpdate = true;
       if (this.bloom) this.bloom.enabled = s.quality === 'high';
       IR.audio.setMusic(s.music); IR.audio.setSfx(s.sfx);
       this.resize();
@@ -129,7 +136,8 @@
       } catch (e) { console.warn('post-processing unavailable', e); this.composer = null; }
     }
     render() {
-      if (this.composer && this.data.settings.quality !== 'low') this.composer.render();
+      // the post-processing chain (bloom + colour grade) only runs on High; Medium/Low draw straight to the screen
+      if (this.composer && this.data.settings.quality === 'high') this.composer.render();
       else this.renderer.render(this.scene, this.camera);
     }
 
@@ -290,6 +298,7 @@
       this.t += dt;
       this.fpsAcc += dt; this.fpsN++;
       if (this.fpsAcc > 1) { this.fps = this.fpsN / this.fpsAcc; this.fpsAcc = 0; this.fpsN = 0; }
+      this.dynamicRes(dt);
       if (this.state === 'paused') { this.render(); return; }
       if (this.state === 'playing') this.updatePlay(dt);
       else if (this.state === 'countdown') {
@@ -308,10 +317,26 @@
       this.render();
       this.adaptQuality(dt);
     }
+    /* dynamic resolution: render fewer pixels when frames are slow, more when there is headroom */
+    dynamicRes(dt) {
+      this.drAcc = (this.drAcc || 0) + dt; this.drN = (this.drN || 0) + 1;
+      if (this.drAcc < 0.6) return;
+      const fps = this.drN / this.drAcc; this.drAcc = 0; this.drN = 0;
+      if (document.hidden || this.state === 'loading') return;
+      let k = this.resScale || 1;
+      if (fps < 42) k *= fps < 28 ? 0.8 : 0.9;
+      else if (fps > 56 && k < 1) k = Math.min(1, k * 1.06);
+      k = Math.max(0.5, k);
+      if (Math.abs(k - (this.resScale || 1)) > 0.02) {
+        this.resScale = k;
+        this.renderer.setPixelRatio(this.basePR * k);
+        this.resize();
+      }
+    }
     adaptQuality(dt) {
       if (this.state !== 'playing') { this.lowT = 0; return; }
       const s = this.data.settings;
-      if (this.fps < 34 && s.quality !== 'low' && !s.manualQ) {
+      if (this.fps < 34 && (this.resScale || 1) <= 0.55 && s.quality !== 'low' && !s.manualQ) {
         this.lowT = (this.lowT || 0) + dt;
         if (this.lowT > 5) { s.quality = s.quality === 'high' ? 'med' : 'low'; this.lowT = 0; this.applySettings(); IR.progress.save(); IR.ui.toast('⚙️ ' + IR.ui.tr('quality') + ': ' + IR.ui.tr(s.quality)); }
       } else this.lowT = 0;
