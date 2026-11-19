@@ -83,7 +83,12 @@
     } else if (st === 'lobby') {
       html = `<div class="bigIcon spin">📡</div><h2>${t('connecting')}</h2>${cancel}`;
     } else if (st === 'error') {
-      html = `<div class="bigIcon">⚠️</div><h2>${t('liveRace')}</h2><p class="errTxt">${t(this.liveErr || 'noConn')}</p>
+      // inside a preview frame (e.g. the Claude app) the browser blocks the connection: send players to the real site
+      const boxed = !IR.NATIVE && this.liveErr === 'noNet' && !/github\.io$|itch\.(zone|io)$|^localhost$|^127\./.test(location.hostname);
+      html = boxed
+        ? `<div class="bigIcon">🌐</div><h2>${t('liveRace')}</h2><p class="errTxt">${t('boxedNote')}</p>
+          <a class="cta" id="bLiveSite" href="https://ssharma3980-ux.github.io/india-run/" target="_blank" rel="noopener">🌐 ${t('openSite')}</a><button class="ghost" id="bLiveX">${t('home')}</button>`
+        : `<div class="bigIcon">⚠️</div><h2>${t('liveRace')}</h2><p class="errTxt">${t(this.liveErr || 'noConn')}</p>
         <button class="cta" id="bLiveRetry">🔁 ${t('retry')}</button><button class="ghost" id="bLiveX">${t('home')}</button>`;
     } else return;
     box.innerHTML = html;

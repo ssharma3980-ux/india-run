@@ -239,3 +239,4 @@ input{font:inherit}
 .liveBtn small{font-size:11px;opacity:.75;font-weight:700}
 .orLine{display:flex;align-items:center;gap:10px;opacity:.6;font-size:12px;font-weight:700;margin:4px 0}
 .orLine::before,.orLine::after{content:"";flex:1;height:1px;background:rgba(255,255,255,.25)}
+a.cta{display:flex;align-items:center;justify-content:center;text-decoration:none;box-sizing:border-box}
