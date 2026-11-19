@@ -14,6 +14,8 @@
     build.call(this, game);
     $('#ui').insertAdjacentHTML('beforeend', `<div id="live" class="screen panelScreen"><div class="panel narrow" id="liveBody"></div></div>`);
     $('#hud').insertAdjacentHTML('beforeend', `<div class="liveCount" id="liveCount"></div>`);
+    $('.runWrap').insertAdjacentHTML('afterend', `<button class="liveBtn" id="bLiveMenu"><span class="liveDot"></span><b data-t="liveRace">${this.tr('liveRace')}</b><small>2P · 4-digit code</small></button>`);
+    $('#bLiveMenu').onclick = () => { this.click(); if (LV.st === 'error') LV.st = 'idle'; this.openLive(); this.renderLive(); };
     LV.cb = (ev, data) => this.liveEvent(ev, data);
     const code = LV.parseLink(location.hash);
     if (code) {
@@ -54,7 +56,14 @@
     const box = $('#liveBody'), t = (k) => this.tr(k), st = LV.st, d = this.g.data;
     const cancel = `<button class="ghost" id="bLiveX">${t('cancel')}</button>`;
     let html = '';
-    if (st === 'opening' || st === 'connecting') {
+    if (st === 'idle') {
+      html = `<div class="mh c"><span class="liveDot"></span><b>${t('liveRace')}</b></div><p class="muted">${t('liveDesc')}</p>
+        <div class="field"><small>${t('yourName')}</small><input id="liveName" maxlength="14" value="${esc(d.name || '')}" placeholder="${t('yourName')}"></div>
+        <button class="cta" id="bLiveHost2">🏁 ${t('createRace')}</button>
+        <div class="orLine"><span>${t('or')}</span></div>
+        <div class="joinRow"><input id="liveCode2" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="${t('enterCode')}" autocomplete="off"><button class="ghost" id="bLiveJoin2">${t('joinRace')} ›</button></div>
+        <button class="ghost" id="bLiveX">${t('home')}</button>`;
+    } else if (st === 'opening' || st === 'connecting') {
       html = `<div class="bigIcon spin">📡</div><h2>${t('connecting')}</h2>${LV.code && st === 'connecting' ? `<p class="codeSmall">${LV.code}</p>` : ''}${cancel}`;
     } else if (st === 'waiting') {
       html = `<div class="mh c"><span class="liveDot"></span><b>${t('liveRace')}</b></div><small class="muted">${t('raceCode')}</small>
@@ -78,6 +87,18 @@
         <button class="cta" id="bLiveRetry">🔁 ${t('retry')}</button><button class="ghost" id="bLiveX">${t('home')}</button>`;
     } else return;
     box.innerHTML = html;
+    if (st === 'idle') {
+      const nm = $('#liveName'), inp = $('#liveCode2');
+      const keepName = () => { d.name = nm.value.trim().slice(0, 14); IR.progress.save(); };
+      inp.oninput = () => { inp.value = inp.value.replace(/\D/g, '').slice(0, 4); };
+      $('#bLiveHost2').onclick = () => { this.click(); keepName(); LV.host(); this.renderLive(); };
+      $('#bLiveJoin2').onclick = () => {
+        this.click(); keepName();
+        if (!/^\d{4}$/.test(inp.value)) { inp.classList.add('shake'); setTimeout(() => inp.classList.remove('shake'), 500); return; }
+        LV.join(inp.value); this.renderLive();
+      };
+      inp.onkeydown = (e) => { if (e.key === 'Enter') $('#bLiveJoin2').click(); };
+    }
     const x = $('#bLiveX'); if (x) x.onclick = () => { this.click(); LV.close(true); this.toMenu(); };
     const go = $('#bLiveGo'); if (go) go.onclick = () => { this.click(); LV.start(); };
     const retry = $('#bLiveRetry'); if (retry) retry.onclick = () => { this.click(); if (LV.lastRole === 'guest' && LV.lastCode) LV.join(LV.lastCode); else LV.host(); this.renderLive(); };
