@@ -53,7 +53,7 @@
       <div id="incoming" class="screen panelScreen"><div class="panel narrow" id="incomingBody"></div></div>
       <div id="hud" class="screen">
         <div class="hudTop">
-          <div class="hScore"><b id="hScore">0</b><small><span id="hDist">0</span> m · <span class="mult" id="hMult">x1</span></small></div>
+          <div class="hLeft"><div class="hScore"><b id="hScore">0</b><small><span id="hDist">0</span> m · <span class="mult" id="hMult">x1</span></small></div><div class="hLives" id="hLives"></div></div>
           <div class="hMid"><div class="hTimer" id="hTimer"></div><div class="hTag" id="hTag"></div></div>
           <div class="hRight"><div class="chip coins"><span>🪙</span><b id="hCoins">0</b></div><div class="chip tok" id="hTok"></div><button class="pauseBtn" id="bPause" aria-label="Pause">❚❚</button></div>
         </div>
@@ -328,6 +328,7 @@
       this.togs();
     },
     hud(p, g) {
+      if (this.livesShown !== p.lives || this.livesRun !== p) { this.livesShown = p.lives; this.livesRun = p; const L = $('#hLives'); L.innerHTML = Array.from({ length: IR.FREE_LIVES }, (_, i) => `<i class="${i < p.lives ? 'on' : ''}">${i < p.lives ? '❤️' : '🤍'}</i>`).join(''); }
       $('#hScore').textContent = fmt(p.score); $('#hDist').textContent = fmt(p.dist); $('#hCoins').textContent = fmt(p.coins);
       $('#hMult').textContent = 'x' + g.mult * (p.pw.multi > 0 ? 2 : 1);
       if (g.festival) $('#hTok').innerHTML = `<span>${IR.FESTIVALS[g.festival].token}</span><b>${p.tokens}</b>`;
@@ -381,6 +382,12 @@
       if (this.tutStep === undefined || this.tutStep > 3) return;
       const want = ['left|right', 'up', 'down', 'left|right'][this.tutStep];
       if (want.split('|').includes(a) && $('#tut').classList.contains('on')) this.tutNext();
+    },
+    lifeUsed(left) {
+      this.livesShown = -1;
+      const L = $('#hLives'); L.classList.remove('hit'); void L.offsetWidth; L.classList.add('hit');
+      this.toast(left > 0 ? `❤️ ${this.tr('freeLife')} · ${left} ${this.tr('livesLeft')}` : `💔 ${this.tr('lastLife')}`, left > 0 ? 'mission' : 'warn');
+      IR.audio.play('power');
     },
     revive(cost, can) {
       this.show('revive');

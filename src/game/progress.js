@@ -1,5 +1,6 @@
 /* Save data, missions, achievements, daily rewards, upgrades */
 (function () {
+  IR.FREE_LIVES = 4; // free second chances in every run
   const KEY = 'indiarun_save_v1';
   const def = () => ({
     coins: 0, best: 0, totalCoins: 0, totalDist: 0, runs: 0, totalJumps: 0,

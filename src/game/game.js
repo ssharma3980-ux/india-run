@@ -150,7 +150,7 @@
       this.p = {
         d: 3, x: 0, y: 0, vy: 0, laneI: 1, speed: 11, dist: 0, coins: 0, score: 0, slideT: 0, slideQ: false, grounded: true,
         turnQ: false, turns: 0, jumps: 0, slides: 0, powers: 0, pw: { magnet: 0, shield: 0, double: 0, multi: 0, boost: 0, glide: 0, rath: 0 }, tokens: 0, treasures: 0, facts: 0,
-        invuln: 0, revives: 0, combo: 0, comboT: 0, nextCheck: 1000, timeLeft: mode === 'timed' ? 120 : 0, fall: false, dead: false, chDone: false,
+        invuln: 0, revives: 0, lives: IR.FREE_LIVES, combo: 0, comboT: 0, nextCheck: 1000, timeLeft: mode === 'timed' ? 120 : 0, fall: false, dead: false, chDone: false,
       };
       this.mult = IR.progress.multiplier();
       this.camYaw = this.run.yaw;
@@ -182,12 +182,15 @@
       if (navigator.vibrate) try { navigator.vibrate(120); } catch (e) {}
     }
     reviveCost() { return 150 * Math.pow(2, this.p.revives); }
-    revive() {
+    revive(free) {
       const p = this.p, cost = this.reviveCost();
-      if (this.data.coins + p.coins < cost) return false;
-      // spend banked coins first, then run coins
-      const fromBank = Math.min(this.data.coins, cost); this.data.coins -= fromBank; p.coins -= cost - fromBank;
-      p.revives++; p.dead = false; p.invuln = 2.5; p.vy = 0; p.slideT = 0; p.fall = false;
+      if (!free) {
+        if (this.data.coins + p.coins < cost) return false;
+        // spend banked coins first, then run coins
+        const fromBank = Math.min(this.data.coins, cost); this.data.coins -= fromBank; p.coins -= cost - fromBank;
+        p.revives++;
+      }
+      p.dead = false; p.invuln = 2.5; p.vy = 0; p.slideT = 0; p.fall = false;
       if (p.cause === 'wall') this.doTurn(true);
       else if (p.cause === 'fall') { const g = this.run.gaps.find(([a, b]) => p.d > a - 1 && p.d < b + 1); if (g) p.d = g[1] + 1; p.y = 0; }
       for (const o of this.run.obstacles) if (Math.abs(o.d - p.d) < 6) this.clearObstacle(o, false);
@@ -298,7 +301,8 @@
       else if (this.state === 'dying') {
         this.dyingT -= dt;
         if (this.p.fall) { this.p.vy -= GRAV * dt; this.p.y += this.p.vy * dt; }
-        if (this.dyingT <= 0) { this.state = 'revive'; IR.ui.revive(this.reviveCost(), this.data.coins + this.p.coins >= this.reviveCost() && this.p.revives < 3); }
+        if (this.dyingT <= 0 && this.p.lives > 0) { this.p.lives--; this.revive(true); IR.ui.lifeUsed(this.p.lives); }
+        else if (this.dyingT <= 0) { this.state = 'revive'; IR.ui.revive(this.reviveCost(), this.data.coins + this.p.coins >= this.reviveCost() && this.p.revives < 3); }
       }
       this.updateVisuals(dt);
       this.render();

@@ -9,7 +9,7 @@
       noConn: 'Could not connect the two phones. Try again, or connect both to Wi-Fi.', friendLeft: 'Your friend left the race.', retry: 'Try again',
       rematch: 'Rematch', waitRematch: 'Waiting for the host to start a rematch…', leave: 'Leave', stillRunning: 'is still running…', isOut: 'is out at',
       youWin: 'You win! 🏆', friendWins: 'wins!', draw: "It's a draw!", go: 'GO!', you: 'You', liveInvite: '🔴 Race me LIVE in INDIA RUN! Code:', city: 'City',
-      raceNote: 'Whoever runs farther wins.',
+      raceNote: 'Whoever runs farther wins.', freeLife: 'Free life used!', livesLeft: 'lives left', lastLife: 'That was your last free life!',
     },
     hi: {
       liveRace: 'लाइव रेस', liveDesc: 'इंटरनेट से दोस्त के साथ एक ही समय पर दौड़ें। 4 अंकों का कोड भेजें और साथ-साथ दौड़ें!',
@@ -19,7 +19,7 @@
       noConn: 'दोनों फ़ोन जुड़ नहीं पाए। फिर कोशिश करें, या दोनों Wi-Fi से जुड़ें।', friendLeft: 'दोस्त रेस छोड़ गया।', retry: 'फिर कोशिश करें',
       rematch: 'फिर से रेस', waitRematch: 'होस्ट की नई रेस का इंतज़ार…', leave: 'बाहर निकलें', stillRunning: 'अभी दौड़ रहा है…', isOut: 'आउट हुआ',
       youWin: 'आप जीते! 🏆', friendWins: 'जीता!', draw: 'बराबरी!', go: 'दौड़ो!', you: 'आप', liveInvite: '🔴 INDIA RUN में मेरे साथ लाइव दौड़ो! कोड:', city: 'शहर',
-      raceNote: 'जो ज़्यादा दूर दौड़ेगा, वही जीतेगा।',
+      raceNote: 'जो ज़्यादा दूर दौड़ेगा, वही जीतेगा।', freeLife: 'फ्री लाइफ़ इस्तेमाल हुई!', livesLeft: 'लाइफ़ बाकी', lastLife: 'यह आपकी आख़िरी फ्री लाइफ़ थी!',
     },
     gu: {
       liveRace: 'લાઇવ રેસ', liveDesc: 'ઇન્ટરનેટથી મિત્ર સાથે એક જ સમયે દોડો. 4 અંકનો કોડ મોકલો અને સાથે દોડો!',
@@ -29,7 +29,7 @@
       noConn: 'બંને ફોન જોડાઈ શક્યા નહીં. ફરી પ્રયાસ કરો, અથવા બંને Wi-Fi પર જોડાઓ.', friendLeft: 'મિત્રએ રેસ છોડી દીધી.', retry: 'ફરી પ્રયાસ કરો',
       rematch: 'ફરી રેસ', waitRematch: 'હોસ્ટની નવી રેસની રાહ…', leave: 'બહાર નીકળો', stillRunning: 'હજી દોડે છે…', isOut: 'આઉટ થયો',
       youWin: 'તમે જીત્યા! 🏆', friendWins: 'જીત્યો!', draw: 'બરાબરી!', go: 'દોડો!', you: 'તમે', liveInvite: '🔴 INDIA RUN માં મારી સાથે લાઇવ દોડો! કોડ:', city: 'શહેર',
-      raceNote: 'જે વધુ દૂર દોડશે તે જીતશે.',
+      raceNote: 'જે વધુ દૂર દોડશે તે જીતશે.', freeLife: 'ફ્રી લાઇફ વપરાઈ!', livesLeft: 'લાઇફ બાકી', lastLife: 'આ તમારી છેલ્લી ફ્રી લાઇફ હતી!',
     },
   };
   for (const k in add) Object.assign(IR.STR[k], add[k]);
